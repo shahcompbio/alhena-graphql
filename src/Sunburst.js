@@ -1,5 +1,5 @@
 const { gql } = require("apollo-server");
-import { getAllAnalyses } from "./api/client.js";
+// import { getAllAnalyses } from "./api/client.js";
 
 import client from "./api/colossus";
 
@@ -79,7 +79,7 @@ export const resolvers = {
 
     analyses: async () => {
       const data = await client
-        .get("/analysis_information/?page=60")
+        .get("/analysis_information/?no_pagination")
         .then(response => {
           return response.data.results;
         })
