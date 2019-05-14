@@ -1,7 +1,9 @@
 const { gql } = require("apollo-server");
 // import { getAllAnalyses } from "./api/client.js";
 
-import client from "./api/colossus";
+// import client from "./api/colossus";
+import bodybuilder from "bodybuilder";
+import client from "./api/client";
 
 import _ from "lodash";
 const FIELD_HIERARCHY = ["project", "sample_id", "library_id", "jira_id"];
@@ -78,15 +80,20 @@ export const resolvers = {
     },
 
     analyses: async () => {
-      const data = await client
-        .get("/analysis_information/?no_pagination")
-        .then(response => {
-          return response.data.results;
-        })
-        .catch(error => {
-          return {};
-        });
-      return processData(data);
+      // const data = await client
+      //   .get("/analysis_information/?no_pagination")
+      //   .then(response => {
+      //     return response.data.results;
+      //   })
+      //   .catch(error => {
+      //     return {};
+      //   });
+
+      const data = await client.search({
+        index: "analyses",
+        size: 10000
+      });
+      return data["body"]["hits"]["hits"].map(hit => hit["_source"]);
     }
   }
 };
