@@ -6,10 +6,10 @@ import _ from "lodash";
 const FIELD_HIERARCHY = ["project", "sample_id", "library_id", "jira_id"];
 export const schema = gql`
   extend type Query {
-    analyses: SunburstData
+    analyses: AnalysesTree
   }
 
-  type SunburstData {
+  type AnalysesTree {
     children: [ParentType!]
   }
   interface NodeType {
@@ -59,7 +59,7 @@ export const resolvers = {
   ChildType: {
     value: () => 1
   },
-  SunburstData: {
+  AnalysesTree: {
     children: root => filterChildren({ filtered: [...root] }, 0)
   },
   Query: {

@@ -1,7 +1,7 @@
 import "@babel/polyfill";
 import { ApolloServer } from "apollo-server-express";
 import { gql } from "apollo-server";
-import * as sunburst from "./Sunburst.js";
+import * as analyses from "./Analyses.js";
 import { makeExecutableSchema } from "graphql-tools";
 import { merge } from "lodash";
 
@@ -11,8 +11,8 @@ const baseSchema = gql`
   }
 `;
 const schema = makeExecutableSchema({
-  typeDefs: [baseSchema, sunburst.schema],
-  resolvers: merge(sunburst.resolvers),
+  typeDefs: [baseSchema, analyses.schema],
+  resolvers: merge(analyses.resolvers),
   inheritResolversFromInterfaces: true
 });
 
