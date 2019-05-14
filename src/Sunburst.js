@@ -1,15 +1,11 @@
 const { gql } = require("apollo-server");
-// import { getAllAnalyses } from "./api/client.js";
 
-// import client from "./api/colossus";
-import bodybuilder from "bodybuilder";
 import client from "./api/client";
 
 import _ from "lodash";
 const FIELD_HIERARCHY = ["project", "sample_id", "library_id", "jira_id"];
 export const schema = gql`
   extend type Query {
-    getAllSunburstAnalyses: SunburstData
     analyses: SunburstData
   }
 
@@ -46,14 +42,6 @@ const filterChildren = (root, hierarchyLevel) => {
   return mappedRoot;
 };
 
-const processData = data =>
-  data.map((datum, index) => ({
-    project:
-      index % 3 === 0 ? "DLP+" : index % 3 === 1 ? "Spectrum" : "Fitness",
-    sample_id: datum["library"]["sample"]["sample_id"],
-    library_id: datum["library"]["pool_id"],
-    jira_id: datum["library"]["jira_ticket"]
-  }));
 export const resolvers = {
   NodeType: {
     name: root => root.name,
@@ -75,20 +63,7 @@ export const resolvers = {
     children: root => filterChildren({ filtered: [...root] }, 0)
   },
   Query: {
-    getAllSunburstAnalyses: async () => {
-      return await getAllAnalyses();
-    },
-
     analyses: async () => {
-      // const data = await client
-      //   .get("/analysis_information/?no_pagination")
-      //   .then(response => {
-      //     return response.data.results;
-      //   })
-      //   .catch(error => {
-      //     return {};
-      //   });
-
       const data = await client.search({
         index: "analyses",
         size: 10000
