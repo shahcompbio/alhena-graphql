@@ -2,11 +2,25 @@ const { gql } = require("apollo-server");
 
 import client from "./api/client";
 
+import bodybuilder from "bodybuilder";
 import _ from "lodash";
+
 const FIELD_HIERARCHY = ["project", "sample_id", "library_id", "jira_id"];
+const FIELD_NAMES = {
+  project: "Project",
+  sample_id: "Sample ID",
+  library_id: "Library ID",
+  jira_id: "Jira ID"
+};
+
 export const schema = gql`
   extend type Query {
-    analyses: AnalysesTree
+    analysesTree(filter: Term): AnalysesTree
+    analysesList(filter: Term): [AnalysisGroup!]
+  }
+  input Term {
+    label: String!
+    value: String!
   }
 
   type AnalysesTree {
@@ -22,6 +36,12 @@ export const schema = gql`
   type ChildType implements NodeType {
     name: String!
     value: Int!
+  }
+
+  type AnalysisGroup {
+    label: String!
+    type: String!
+    values: [String!]
   }
 `;
 
@@ -41,6 +61,23 @@ const filterChildren = (root, hierarchyLevel) => {
 
   return mappedRoot;
 };
+
+async function getAnalyses(filter) {
+  const query =
+    filter === null
+      ? bodybuilder()
+          .size(10000)
+          .build()
+      : bodybuilder()
+          .size(10000)
+          .filter("term", filter["label"], filter["value"])
+          .build();
+  const data = await client.search({
+    index: "analyses",
+    body: query
+  });
+  return data["body"]["hits"]["hits"].map(hit => hit["_source"]);
+}
 
 export const resolvers = {
   NodeType: {
@@ -62,13 +99,40 @@ export const resolvers = {
   AnalysesTree: {
     children: root => filterChildren({ filtered: [...root] }, 0)
   },
+
+  AnalysisGroup: {
+    label: root => root.label,
+    type: root => root.type,
+    values: root => root.values
+  },
   Query: {
-    analyses: async () => {
-      const data = await client.search({
-        index: "analyses",
-        size: 10000
+    analysesTree: async (_, { filter }) => {
+      const data = await getAnalyses(filter);
+      return data;
+    },
+
+    analysesList: async (_, { filter }) => {
+      const data = await getAnalyses(filter);
+
+      const uniqueValuesInHierarchy = FIELD_HIERARCHY.map(field => {
+        const values = data
+          .map(datum => datum[field])
+          .reduce(
+            (uniqueList, fieldValue) =>
+              uniqueList.indexOf(fieldValue) === -1
+                ? [...uniqueList, fieldValue]
+                : uniqueList,
+            []
+          );
+
+        return {
+          label: FIELD_NAMES[field],
+          type: field,
+          values: values
+        };
       });
-      return data["body"]["hits"]["hits"].map(hit => hit["_source"]);
+
+      return uniqueValuesInHierarchy;
     }
   }
 };
