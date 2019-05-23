@@ -17,6 +17,7 @@ export const schema = gql`
   extend type Query {
     analysesTree(filter: Term): AnalysesTree
     analysesList(filter: Term): [AnalysisGroup!]
+    analysesStats(filter: Term): [Stat!]!
   }
   input Term {
     label: String!
@@ -42,6 +43,11 @@ export const schema = gql`
     label: String!
     type: String!
     values: [String!]
+  }
+
+  type Stat {
+    label: String!
+    value: Int!
   }
 `;
 
@@ -79,6 +85,15 @@ async function getAnalyses(filter) {
   return data["body"]["hits"]["hits"].map(hit => hit["_source"]);
 }
 
+const getUniqueValuesInKey = (list, key) =>
+  list
+    .map(element => element[key])
+    .reduce(
+      (uniques, value) =>
+        uniques.indexOf(value) === -1 ? [...uniques, value] : uniques,
+      []
+    );
+
 export const resolvers = {
   NodeType: {
     name: root => root.name,
@@ -105,6 +120,10 @@ export const resolvers = {
     type: root => root.type,
     values: root => root.values
   },
+  Stat: {
+    label: root => root.label,
+    value: root => root.value
+  },
   Query: {
     analysesTree: async (_, { filter }) => {
       const data = await getAnalyses(filter);
@@ -115,15 +134,7 @@ export const resolvers = {
       const data = await getAnalyses(filter);
 
       const uniqueValuesInHierarchy = FIELD_HIERARCHY.map(field => {
-        const values = data
-          .map(datum => datum[field])
-          .reduce(
-            (uniqueList, fieldValue) =>
-              uniqueList.indexOf(fieldValue) === -1
-                ? [...uniqueList, fieldValue]
-                : uniqueList,
-            []
-          );
+        const values = getUniqueValuesInKey(data, field);
 
         return {
           label: FIELD_NAMES[field],
@@ -133,6 +144,23 @@ export const resolvers = {
       });
 
       return uniqueValuesInHierarchy;
+    },
+
+    analysesStats: async (_, { filter }) => {
+      const data = await getAnalyses(filter);
+
+      // Return count of each thing in the hierarchy
+
+      const counts = FIELD_HIERARCHY.map(field => {
+        const values = getUniqueValuesInKey(data, field);
+
+        return {
+          label: FIELD_NAMES[field],
+          value: values.length
+        };
+      });
+
+      return counts;
     }
   }
 };
