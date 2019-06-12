@@ -25,16 +25,19 @@ export const schema = gql`
   }
 
   type AnalysesTree {
+    parent: String
     children: [ParentType!]
   }
   interface NodeType {
     name: String!
   }
   type ParentType implements NodeType {
+    parent: String
     name: String!
     children: [NodeType!]
   }
   type ChildType implements NodeType {
+    parent: String
     name: String!
     value: Int!
   }
@@ -58,6 +61,7 @@ const filterChildren = (root, hierarchyLevel) => {
 
   const mappedRoot = uniqueRoot.map(field => ({
     name: field,
+    parent: root.filtered[0][FIELD_HIERARCHY[hierarchyLevel - 1]],
     hierarchyLevel: hierarchyLevel + 1,
     filtered: root.filtered.filter(
       analysis =>
@@ -110,12 +114,15 @@ export const resolvers = {
     }
   },
   ParentType: {
+    parent: root => root.parent,
     children: root => filterChildren(root, root.hierarchyLevel)
   },
   ChildType: {
+    parent: root => root.parent,
     value: () => 1
   },
   AnalysesTree: {
+    parent: () => null,
     children: root => filterChildren({ filtered: [...root] }, 0)
   },
 
