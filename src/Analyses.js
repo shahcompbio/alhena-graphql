@@ -15,9 +15,9 @@ const FIELD_NAMES = {
 
 export const schema = gql`
   extend type Query {
-    analysesTree(filter: Term): AnalysesTree
-    analysesList(filter: Term): [AnalysisGroup!]
-    analysesStats(filter: Term): [Stat!]!
+    analysesTree(filters: [Term]!): AnalysesTree
+    analysesList(filters: [Term]!): [AnalysisGroup!]
+    analysesStats(filters: [Term]!): [Stat!]!
   }
   input Term {
     label: String!
@@ -25,19 +25,16 @@ export const schema = gql`
   }
 
   type AnalysesTree {
-    parent: String
     children: [ParentType!]
   }
   interface NodeType {
     name: String!
   }
   type ParentType implements NodeType {
-    parent: String
     name: String!
     children: [NodeType!]
   }
   type ChildType implements NodeType {
-    parent: String
     name: String!
     value: Int!
   }
@@ -61,7 +58,6 @@ const filterChildren = (root, hierarchyLevel) => {
 
   const mappedRoot = uniqueRoot.map(field => ({
     name: field,
-    parent: root.filtered[0][FIELD_HIERARCHY[hierarchyLevel - 1]],
     hierarchyLevel: hierarchyLevel + 1,
     filtered: root.filtered.filter(
       analysis =>
@@ -72,16 +68,20 @@ const filterChildren = (root, hierarchyLevel) => {
   return mappedRoot;
 };
 
-async function getAnalyses(filter) {
+async function getAnalyses(filters) {
+  const baseQuery = bodybuilder().size(10000);
+
   const query =
-    filter === null
-      ? bodybuilder()
-          .size(10000)
-          .build()
-      : bodybuilder()
-          .size(10000)
-          .filter("term", filter["label"], filter["value"])
+    filters === []
+      ? baseQuery.build()
+      : filters
+          .reduce(
+            (query, filter) =>
+              query.filter("term", filter["label"], filter["value"]),
+            baseQuery
+          )
           .build();
+
   const data = await client.search({
     index: "analyses",
     body: query
@@ -110,15 +110,12 @@ export const resolvers = {
     }
   },
   ParentType: {
-    parent: root => root.parent,
     children: root => filterChildren(root, root.hierarchyLevel)
   },
   ChildType: {
-    parent: root => root.parent,
     value: () => 1
   },
   AnalysesTree: {
-    parent: () => null,
     children: root => filterChildren({ filtered: [...root] }, 0)
   },
 
@@ -132,13 +129,13 @@ export const resolvers = {
     value: root => root.value
   },
   Query: {
-    analysesTree: async (_, { filter }) => {
-      const data = await getAnalyses(filter);
+    analysesTree: async (_, { filters }) => {
+      const data = await getAnalyses(filters);
       return data;
     },
 
-    analysesList: async (_, { filter }) => {
-      const data = await getAnalyses(filter);
+    analysesList: async (_, { filters }) => {
+      const data = await getAnalyses(filters);
 
       const uniqueValuesInHierarchy = FIELD_HIERARCHY.map(field => {
         const values = getUniqueValuesInKey(data, field);
@@ -153,8 +150,8 @@ export const resolvers = {
       return uniqueValuesInHierarchy;
     },
 
-    analysesStats: async (_, { filter }) => {
-      const data = await getAnalyses(filter);
+    analysesStats: async (_, { filters }) => {
+      const data = await getAnalyses(filters);
 
       // Return count of each thing in the hierarchy
 
