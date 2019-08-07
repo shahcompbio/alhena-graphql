@@ -1,7 +1,10 @@
 import "@babel/polyfill";
 import { ApolloServer } from "apollo-server-express";
 import { gql } from "apollo-server";
+
 import * as analyses from "./Analyses.js";
+import * as projects from "./Projects.js";
+
 import { makeExecutableSchema } from "graphql-tools";
 import { merge } from "lodash";
 
@@ -11,8 +14,8 @@ const baseSchema = gql`
   }
 `;
 const schema = makeExecutableSchema({
-  typeDefs: [baseSchema, analyses.schema],
-  resolvers: merge(analyses.resolvers),
+  typeDefs: [baseSchema, analyses.schema, projects.schema],
+  resolvers: merge(analyses.resolvers, projects.resolvers),
   inheritResolversFromInterfaces: true
 });
 
