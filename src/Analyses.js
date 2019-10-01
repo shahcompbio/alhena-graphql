@@ -1,9 +1,14 @@
+var Redis = require("ioredis");
+var redis = new Redis();
+
 const { gql } = require("apollo-server");
 
 import client from "./api/client";
 
 import bodybuilder from "bodybuilder";
 import _ from "lodash";
+
+import { getApiId } from "./Projects";
 
 const FIELD_HIERARCHY = ["project", "sample_id", "library_id", "jira_id"];
 const FIELD_NAMES = {
@@ -15,9 +20,9 @@ const FIELD_NAMES = {
 
 export const schema = gql`
   extend type Query {
-    analysesTree(filters: [Term]!): AnalysesTree
-    analysesList(filters: [Term]!): [AnalysisGroup!]
-    analysesStats(filters: [Term]!): [Stat!]!
+    analysesTree(filters: [Term]!, auth: ApiUser!): AnalysesTree
+    analysesList(filters: [Term]!, auth: ApiUser!): [AnalysisGroup!]
+    analysesStats(filters: [Term]!, auth: ApiUser!): [Stat!]!
   }
   input Term {
     label: String!
@@ -25,20 +30,20 @@ export const schema = gql`
   }
 
   type AnalysesTree {
-    parent: String
+    source: String
     children: [ParentType!]
   }
   interface NodeType {
-    name: String!
+    target: String!
   }
   type ParentType implements NodeType {
-    parent: String
-    name: String!
+    source: String
+    target: String!
     children: [NodeType!]
   }
   type ChildType implements NodeType {
-    parent: String
-    name: String!
+    source: String
+    target: String!
     value: Int!
   }
 
@@ -60,8 +65,8 @@ const filterChildren = (root, hierarchyLevel) => {
   );
 
   const mappedRoot = uniqueRoot.map(field => ({
-    name: field,
-    parent: root.filtered[0][FIELD_HIERARCHY[hierarchyLevel - 1]],
+    target: field,
+    source: root.filtered[0][FIELD_HIERARCHY[hierarchyLevel - 1]],
     hierarchyLevel: hierarchyLevel + 1,
     filtered: root.filtered.filter(
       analysis =>
@@ -72,7 +77,7 @@ const filterChildren = (root, hierarchyLevel) => {
   return mappedRoot;
 };
 
-async function getAnalyses(filters) {
+async function getAnalyses(filters, auth) {
   const baseQuery = bodybuilder().size(10000);
 
   const query =
@@ -86,7 +91,8 @@ async function getAnalyses(filters) {
           )
           .build();
 
-  const data = await client.search({
+  const authKey = await redis.get(auth.uid + ":" + auth.authKeyID);
+  const data = await client(authKey, auth.authKeyID).search({
     index: "analyses",
     body: query
   });
@@ -104,7 +110,7 @@ const getUniqueValuesInKey = (list, key) =>
 
 export const resolvers = {
   NodeType: {
-    name: root => root.name,
+    target: root => root.target,
     __resolveType(event, context, info) {
       if (event.hierarchyLevel === FIELD_HIERARCHY.length) {
         return "ChildType";
@@ -114,15 +120,15 @@ export const resolvers = {
     }
   },
   ParentType: {
-    parent: root => root.parent,
+    source: root => root.source,
     children: root => filterChildren(root, root.hierarchyLevel)
   },
   ChildType: {
-    parent: root => root.parent,
+    source: root => root.source,
     value: () => 1
   },
   AnalysesTree: {
-    parent: () => null,
+    source: () => null,
     children: root => filterChildren({ filtered: [...root] }, 0)
   },
 
@@ -136,13 +142,13 @@ export const resolvers = {
     value: root => root.value
   },
   Query: {
-    analysesTree: async (_, { filters }) => {
-      const data = await getAnalyses(filters);
+    analysesTree: async (_, { filters, auth }) => {
+      const data = await getAnalyses(filters, auth);
       return data;
     },
 
-    analysesList: async (_, { filters }) => {
-      const data = await getAnalyses(filters);
+    analysesList: async (_, { filters, auth }) => {
+      const data = await getAnalyses(filters, auth);
 
       const uniqueValuesInHierarchy = FIELD_HIERARCHY.map(field => {
         const values = getUniqueValuesInKey(data, field);
@@ -157,8 +163,8 @@ export const resolvers = {
       return uniqueValuesInHierarchy;
     },
 
-    analysesStats: async (_, { filters }) => {
-      const data = await getAnalyses(filters);
+    analysesStats: async (_, { filters, auth }) => {
+      const data = await getAnalyses(filters, auth);
 
       // Return count of each thing in the hierarchy
 

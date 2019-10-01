@@ -1,9 +1,10 @@
 import "@babel/polyfill";
 import { ApolloServer } from "apollo-server-express";
-import { gql } from "apollo-server";
+import { gql, AuthenticationError } from "apollo-server";
 
 import * as analyses from "./Analyses.js";
 import * as projects from "./Projects.js";
+import * as auth from "./Auth.js";
 
 import { makeExecutableSchema } from "graphql-tools";
 import { merge } from "lodash";
@@ -14,8 +15,8 @@ const baseSchema = gql`
   }
 `;
 const schema = makeExecutableSchema({
-  typeDefs: [baseSchema, analyses.schema, projects.schema],
-  resolvers: merge(analyses.resolvers, projects.resolvers),
+  typeDefs: [baseSchema, analyses.schema, projects.schema, auth.schema],
+  resolvers: merge(analyses.resolvers, projects.resolvers, auth.resolvers),
   inheritResolversFromInterfaces: true
 });
 
