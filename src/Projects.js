@@ -1,6 +1,4 @@
-require("dotenv").config();
-var Redis = require("ioredis");
-var redis = new Redis();
+import redis from "./api/redisClient.js";
 const { gql } = require("apollo-server");
 
 import client from "./api/client";
@@ -9,9 +7,6 @@ import authClient from "./api/authClient";
 import _ from "lodash";
 
 const FIELDS = ["project"];
-
-const adminPassword = process.env.PASS;
-const adminUser = process.env.UID;
 
 export const schema = gql`
   extend type Query {

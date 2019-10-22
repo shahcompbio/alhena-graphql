@@ -1,5 +1,4 @@
-var Redis = require("ioredis");
-var redis = new Redis();
+import redis from "./api/redisClient.js";
 
 const { gql } = require("apollo-server");
 
