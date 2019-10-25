@@ -13,6 +13,7 @@ export const schema = gql`
     getUsers(auth: ApiUser!): [AppUsers]
     createNewUser(user: NewUser!): CreationAcknowledgement
     verifyNewUserUri(key: String!): NewUserAcknowledgement
+    deleteUser(username: String!): DeletionAcknowledgement
   }
   input NewUser {
     username: String!
@@ -42,6 +43,9 @@ export const schema = gql`
     isValid: Boolean!
     email: String
   }
+  type DeletionAcknowledgement {
+    isDeleted: Boolean
+  }
   type CreationAcknowledgement {
     created: Boolean
   }
@@ -52,7 +56,16 @@ export const schema = gql`
   }
 `;
 const verifyUriKey = async key => await redis.get(key);
-
+const deleteUser = async username => {
+  var response = await authClient(
+    process.env.ES_USER,
+    process.env.ES_PASSWORD
+  ).security.deleteUser({
+    username: username,
+    refresh: "wait_for"
+  });
+  return response.body;
+};
 const createNewUser = async user => {
   var response = await authClient(
     process.env.ES_USER,
@@ -130,6 +143,9 @@ export const resolvers = {
     },
     verifyNewUserUri: async (_, { key }) => {
       return await verifyUriKey(key);
+    },
+    deleteUser: async (_, { username }) => {
+      return await deleteUser(username);
     }
   },
   AppUsers: {
@@ -142,6 +158,9 @@ export const resolvers = {
   NewUserAcknowledgement: {
     isValid: root => (root ? true : false),
     email: root => root
+  },
+  DeletionAcknowledgement: {
+    isDeleted: root => root.found
   },
   CreationAcknowledgement: { created: root => root.created },
   LoginAcknowledgement: {
