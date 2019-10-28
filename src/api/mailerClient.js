@@ -57,7 +57,14 @@ const mailer = async recipient => {
           from: process.env.ADMIN_EMAIL,
           to: recipient.email,
           subject: "Create Account",
-          html: htmlToSend
+          html: htmlToSend,
+          attachments: [
+            {
+              filename: "logo.png",
+              path: __dirname + "/utils/images/logo.png",
+              cid: "logo"
+            }
+          ]
         });
 
         resolve({ response: response, secureUrl: secureUrl });
