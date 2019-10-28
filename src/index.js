@@ -1,10 +1,15 @@
+require("dotenv").config();
 import "@babel/polyfill";
 
 import { ApolloServer } from "apollo-server-express";
-import { gql } from "apollo-server";
+import { gql, AuthenticationError } from "apollo-server";
 
-import * as foo from "./foo.js";
+import * as analyses from "./Analyses.js";
+import * as projects from "./Projects.js";
+import * as auth from "./Auth.js";
+import * as mailer from "./Mailer.js";
 
+import { makeExecutableSchema } from "graphql-tools";
 import { merge } from "lodash";
 
 const baseSchema = gql`
@@ -12,11 +17,24 @@ const baseSchema = gql`
     _blank: String
   }
 `;
-
-const server = new ApolloServer({
-  typeDefs: [baseSchema, foo.schema],
-  resolvers: merge(foo.resolvers)
+const schema = makeExecutableSchema({
+  typeDefs: [
+    baseSchema,
+    analyses.schema,
+    projects.schema,
+    auth.schema,
+    mailer.schema
+  ],
+  resolvers: merge(
+    analyses.resolvers,
+    projects.resolvers,
+    auth.resolvers,
+    mailer.resolvers
+  ),
+  inheritResolversFromInterfaces: true
 });
+
+const server = new ApolloServer({ schema });
 
 const express = require("express");
 const app = express();
