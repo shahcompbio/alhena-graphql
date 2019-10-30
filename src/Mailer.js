@@ -2,8 +2,6 @@ export default mailer;
 import redis from "./api/redisClient.js";
 const { gql, AuthenticationError } = require("apollo-server");
 
-import { oneDayExpiryDate } from "./api/utils/config.js";
-
 import mailer from "./api/mailerClient";
 
 import _ from "lodash";
@@ -15,6 +13,7 @@ export const schema = gql`
   input Recipient {
     email: String!
     name: String!
+    roles: String!
   }
   type Response {
     response: String!
@@ -33,7 +32,18 @@ export const resolvers = {
           mailResponse.secureUrl,
           mailResponse.response.accepted[0]
         );
-        await redis.expireat(mailResponse.secureUrl, oneDayExpiryDate());
+        await redis.expireat(
+          mailResponse.secureUrl,
+          parseInt(+new Date() / 1000) + 86400
+        );
+
+        //store user roles
+
+        await redis.set("roles_" + recipient.email, recipient.roles);
+        await redis.expireat(
+          "roles_" + recipient.email,
+          parseInt(+new Date() / 1000) + 86400
+        );
       }
       return mailResponse.response;
     }
