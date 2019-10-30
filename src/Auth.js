@@ -3,7 +3,8 @@ const { gql, AuthenticationError } = require("apollo-server");
 
 import authClient from "./api/authClient";
 import client from "./api/client";
-import { oneDayExpiryDate } from "./api/utils/config.js";
+
+import { superUserRoles } from "./api/utils/config.js";
 
 import _ from "lodash";
 
@@ -13,7 +14,12 @@ export const schema = gql`
     getUsers(auth: ApiUser!): [AppUsers]
     createNewUser(user: NewUser!): CreationAcknowledgement
     verifyNewUserUri(key: String!): NewUserAcknowledgement
+    updateUserRoles(
+      newRoles: [String!]
+      username: String
+    ): CreationAcknowledgement
     deleteUser(username: String!): DeletionAcknowledgement
+    getProjectRoles: ProjectRoles
   }
   input NewUser {
     username: String!
@@ -31,6 +37,9 @@ export const schema = gql`
   input ApiUser {
     uid: String!
     authKeyID: String!
+  }
+  type ProjectRoles {
+    roles: [String]
   }
   type AppUsers {
     username: String
@@ -55,6 +64,16 @@ export const schema = gql`
     role: [String]
   }
 `;
+const getRoles = async () => {
+  var response = await authClient(
+    process.env.ES_USER,
+    process.env.ES_PASSWORD
+  ).security.getRole({});
+
+  return Object.keys(response.body).filter(
+    role => role.indexOf("_dashboardReader") !== -1
+  );
+};
 const verifyUriKey = async key => await redis.get(key);
 const deleteUser = async username => {
   var response = await authClient(
@@ -66,7 +85,10 @@ const deleteUser = async username => {
   });
   return response.body;
 };
+
 const createNewUser = async user => {
+  var roles = await redis.get("roles_" + user.email);
+
   var response = await authClient(
     process.env.ES_USER,
     process.env.ES_PASSWORD
@@ -77,9 +99,10 @@ const createNewUser = async user => {
       password: user.password,
       full_name: user.name,
       email: user.email,
-      roles: ["dashboardViewer"]
+      roles: [...roles.split(",")]
     }
   });
+
   return response.body;
 };
 const getUsers = async auth => {
@@ -87,9 +110,13 @@ const getUsers = async auth => {
   const data = await client(authKey, auth.authKeyID).security.getUser({});
   var users =
     data.statusCode === 200
-      ? Object.keys(data.body).map(name => {
-          return { ...data.body[name] };
-        })
+      ? Object.keys(data.body)
+          .filter(
+            name => !superUserRoles.hasOwnProperty(data.body[name].roles[0])
+          )
+          .map(name => {
+            return { ...data.body[name] };
+          })
       : [];
   return users;
 };
@@ -117,7 +144,11 @@ const login = async user => {
 
       //store in local sotrage to expire tomorrow
       redis.set(user.uid + ":" + newKey.body.id, newKey.body.api_key);
-      redis.expireat(user.uid + ":" + newKey.body.id, oneDayExpiryDate());
+
+      redis.expireat(
+        user.uid + ":" + newKey.body.id,
+        parseInt(+new Date() / 1000) + 86400
+      );
 
       return {
         statusCode: newKey.statusCode,
@@ -129,7 +160,19 @@ const login = async user => {
     }
   }
 };
-
+const updateRoles = async (newRoles, username) => {
+  var response = await authClient(
+    process.env.ES_USER,
+    process.env.ES_PASSWORD
+  ).security.putUser({
+    username: username,
+    refresh: "wait_for",
+    body: {
+      roles: [...newRoles]
+    }
+  });
+  return response.body;
+};
 export const resolvers = {
   Query: {
     login: async (_, { user }) => {
@@ -146,6 +189,12 @@ export const resolvers = {
     },
     deleteUser: async (_, { username }) => {
       return await deleteUser(username);
+    },
+    getProjectRoles: async () => {
+      return await getRoles();
+    },
+    updateUserRoles: async (_, { newRoles, username }) => {
+      return await updateRoles(newRoles, username);
     }
   },
   AppUsers: {
@@ -154,6 +203,10 @@ export const resolvers = {
     full_name: ({ full_name }) => full_name,
     enabled: ({ enabled }) => enabled.toString(),
     email: ({ email }) => email
+  },
+  ProjectRoles: {
+    roles: root => root
+    //  indices: root => root.indices
   },
   NewUserAcknowledgement: {
     isValid: root => (root ? true : false),
