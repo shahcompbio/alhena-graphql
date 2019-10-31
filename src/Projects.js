@@ -11,13 +11,31 @@ const FIELDS = ["project"];
 export const schema = gql`
   extend type Query {
     getProjects(auth: ApiUser!): [Project]
+    getAllIndices: [Index!]
+  }
+  type Index {
+    name: String
   }
   type Project {
     name: String!
     count: Int!
   }
 `;
-
+var collator = new Intl.Collator(undefined, {
+  numeric: true,
+  sensitivity: "base"
+});
+export const getIndices = async () => {
+  var response = await authClient(
+    process.env.ES_USER,
+    process.env.ES_PASSWORD
+  ).search({
+    index: "analyses",
+    size: 5000
+  });
+  const indexNames = response.body.hits.hits.map(hit => hit._source.jira_id);
+  return [...new Set(indexNames)].sort(collator.compare);
+};
 export const getApiId = async uid => {
   const apiKeyResult = await authClient(
     adminUser,
@@ -37,7 +55,13 @@ export const resolvers = {
     name: root => root.key,
     count: root => root.doc_count
   },
+  Index: {
+    name: root => root
+  },
   Query: {
+    async getAllIndices() {
+      return await getIndices();
+    },
     async getProjects(_, { auth }) {
       const authKey = await redis.get(auth.uid + ":" + auth.authKeyID);
 
