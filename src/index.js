@@ -5,7 +5,7 @@ import { ApolloServer } from "apollo-server-express";
 import { gql, AuthenticationError } from "apollo-server";
 
 import * as analyses from "./Analyses.js";
-import * as projects from "./Projects.js";
+import * as dashboards from "./Dashboards.js";
 import * as auth from "./Auth.js";
 import * as mailer from "./Mailer.js";
 
@@ -21,13 +21,13 @@ const schema = makeExecutableSchema({
   typeDefs: [
     baseSchema,
     analyses.schema,
-    projects.schema,
+    dashboards.schema,
     auth.schema,
     mailer.schema
   ],
   resolvers: merge(
     analyses.resolvers,
-    projects.resolvers,
+    dashboards.resolvers,
     auth.resolvers,
     mailer.resolvers
   ),

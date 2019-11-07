@@ -7,7 +7,7 @@ import client from "./api/client";
 import bodybuilder from "bodybuilder";
 import _ from "lodash";
 
-import { getApiId } from "./Projects";
+import { getApiId } from "./Dashboards";
 
 const FIELD_HIERARCHY = ["project", "sample_id", "library_id", "jira_id"];
 const FIELD_NAMES = {
@@ -91,6 +91,7 @@ async function getAnalyses(filters, auth) {
           .build();
 
   const authKey = await redis.get(auth.uid + ":" + auth.authKeyID);
+
   const data = await client(authKey, auth.authKeyID).search({
     index: "analyses",
     body: query

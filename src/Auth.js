@@ -5,6 +5,7 @@ import authClient from "./api/authClient";
 import client from "./api/client";
 
 import { superUserRoles } from "./api/utils/config.js";
+import { createSuperUserClient, getRedisApiKey } from "./utils.js";
 
 import _ from "lodash";
 
@@ -16,10 +17,11 @@ export const schema = gql`
     verifyNewUserUri(key: String!): NewUserAcknowledgement
     updateUserRoles(
       newRoles: [String!]
-      username: String
+      username: String!
+      email: String!
+      name: String!
     ): CreationAcknowledgement
     deleteUser(username: String!): DeletionAcknowledgement
-    getProjectRoles: ProjectRoles
   }
   input NewUser {
     username: String!
@@ -37,9 +39,6 @@ export const schema = gql`
   input ApiUser {
     uid: String!
     authKeyID: String!
-  }
-  type ProjectRoles {
-    roles: [String]
   }
   type AppUsers {
     username: String
@@ -64,17 +63,9 @@ export const schema = gql`
     role: [String]
   }
 `;
-const getRoles = async () => {
-  var response = await authClient(
-    process.env.ES_USER,
-    process.env.ES_PASSWORD
-  ).security.getRole({});
 
-  return Object.keys(response.body).filter(
-    role => role.indexOf("_dashboardReader") !== -1
-  );
-};
 const verifyUriKey = async key => await redis.get(key);
+
 const deleteUser = async username => {
   var response = await authClient(
     process.env.ES_USER,
@@ -117,28 +108,42 @@ const getUsers = async auth => {
           .map(name => {
             return { ...data.body[name] };
           })
+          .map(user => {
+            user["roles"] = user.roles.map(role => role.split("_")[0]);
+            return user;
+          })
       : [];
   return users;
 };
 const login = async user => {
-  const result = await authClient(user.uid, user.password).security.getApiKey({
+  /*  const isPasswordCorrect = await authClient(user.uid, user.password).search(
+    {
+      index: "analyses"
+    },
+    function(error) {
+      console.log(error);
+    }
+  );*/
+  //console.log(isPasswordCorrect);
+  const client = authClient(process.env.ES_USER, process.env.ES_PASSWORD);
+
+  const result = await client.security.getApiKey({
     username: user.uid
   });
   //wrong auth
   if (result.statusCode === 200) {
     //if keys invalidate
     var oldKey;
-    var authorizedClient = authClient(user.uid, user.password);
     if (result.body.api_keys.length !== 0) {
-      oldKey = await authorizedClient.security.invalidateApiKey({
+      oldKey = await client.security.invalidateApiKey({
         body: { name: "login-" + user.uid }
       });
     }
     if ((oldKey && oldKey.statusCode === 200) || oldKey === undefined) {
-      const newKey = await authorizedClient.security.createApiKey({
+      const newKey = await client.security.createApiKey({
         body: { name: "login-" + user.uid, expiration: "1d" }
       });
-      const roleMapping = await authorizedClient.security.getUser({
+      const roleMapping = await client.security.getUser({
         username: user.uid
       });
 
@@ -160,7 +165,7 @@ const login = async user => {
     }
   }
 };
-const updateRoles = async (newRoles, username) => {
+const updateRoles = async (newRoles, username, email, name) => {
   var response = await authClient(
     process.env.ES_USER,
     process.env.ES_PASSWORD
@@ -168,7 +173,15 @@ const updateRoles = async (newRoles, username) => {
     username: username,
     refresh: "wait_for",
     body: {
-      roles: [...newRoles]
+      email: email,
+      full_name: name,
+      roles: [
+        ...newRoles.map(role =>
+          role.indexOf("_dashboardReader") === -1
+            ? role + "_dashboardReader"
+            : role
+        )
+      ]
     }
   });
   return response.body;
@@ -190,11 +203,8 @@ export const resolvers = {
     deleteUser: async (_, { username }) => {
       return await deleteUser(username);
     },
-    getProjectRoles: async () => {
-      return await getRoles();
-    },
-    updateUserRoles: async (_, { newRoles, username }) => {
-      return await updateRoles(newRoles, username);
+    updateUserRoles: async (_, { newRoles, username, email, name }) => {
+      return await updateRoles(newRoles, username, email, name);
     }
   },
   AppUsers: {
@@ -203,10 +213,6 @@ export const resolvers = {
     full_name: ({ full_name }) => full_name,
     enabled: ({ enabled }) => enabled.toString(),
     email: ({ email }) => email
-  },
-  ProjectRoles: {
-    roles: root => root
-    //  indices: root => root.indices
   },
   NewUserAcknowledgement: {
     isValid: root => (root ? true : false),
