@@ -67,10 +67,9 @@ export const schema = gql`
 const verifyUriKey = async key => await redis.get(key);
 
 const deleteUser = async username => {
-  var response = await authClient(
-    process.env.ES_USER,
-    process.env.ES_PASSWORD
-  ).security.deleteUser({
+  const client = createSuperUserClient();
+
+  var response = await client.security.deleteUser({
     username: username,
     refresh: "wait_for"
   });
@@ -79,11 +78,9 @@ const deleteUser = async username => {
 
 const createNewUser = async user => {
   var roles = await redis.get("roles_" + user.email);
+  const client = createSuperUserClient();
 
-  var response = await authClient(
-    process.env.ES_USER,
-    process.env.ES_PASSWORD
-  ).security.putUser({
+  var response = await client.security.putUser({
     username: user.username,
     refresh: "wait_for",
     body: {
@@ -116,60 +113,57 @@ const getUsers = async auth => {
   return users;
 };
 const login = async user => {
-  /*  const isPasswordCorrect = await authClient(user.uid, user.password).search(
-    {
-      index: "analyses"
-    },
-    function(error) {
-      console.log(error);
-    }
-  );*/
-  //console.log(isPasswordCorrect);
-  const client = authClient(process.env.ES_USER, process.env.ES_PASSWORD);
-
-  const result = await client.security.getApiKey({
-    username: user.uid
+  const isPasswordCorrect = await authClient(user.uid, user.password).search({
+    index: "analyses",
+    size: 1
   });
-  //wrong auth
-  if (result.statusCode === 200) {
-    //if keys invalidate
-    var oldKey;
-    if (result.body.api_keys.length !== 0) {
-      oldKey = await client.security.invalidateApiKey({
-        body: { name: "login-" + user.uid }
-      });
-    }
-    if ((oldKey && oldKey.statusCode === 200) || oldKey === undefined) {
-      const newKey = await client.security.createApiKey({
-        body: { name: "login-" + user.uid, expiration: "1d" }
-      });
-      const roleMapping = await client.security.getUser({
-        username: user.uid
-      });
 
-      //store in local sotrage to expire tomorrow
-      redis.set(user.uid + ":" + newKey.body.id, newKey.body.api_key);
+  if (isPasswordCorrect.body.statusCode === 200) {
+    const client = authClient(process.env.ES_USER, process.env.ES_PASSWORD);
 
-      redis.expireat(
-        user.uid + ":" + newKey.body.id,
-        parseInt(+new Date() / 1000) + 86400
-      );
+    const result = await client.security.getApiKey({
+      username: user.uid
+    });
+    //wrong auth
+    if (result.statusCode === 200) {
+      //if keys invalidate
+      var oldKey;
+      if (result.body.api_keys.length !== 0) {
+        oldKey = await client.security.invalidateApiKey({
+          body: { name: "login-" + user.uid }
+        });
+      }
+      if ((oldKey && oldKey.statusCode === 200) || oldKey === undefined) {
+        const newKey = await client.security.createApiKey({
+          body: { name: "login-" + user.uid, expiration: "1d" }
+        });
+        const roleMapping = await client.security.getUser({
+          username: user.uid
+        });
 
-      return {
-        statusCode: newKey.statusCode,
-        authKeyID: newKey.body ? newKey.body.id : null,
-        role: roleMapping.body[user.uid].roles
-      };
-    } else {
-      return { statusCode: oldKey.statusCode, authKeyID: null, role: [] };
+        //store in local sotrage to expire tomorrow
+        redis.set(user.uid + ":" + newKey.body.id, newKey.body.api_key);
+
+        redis.expireat(
+          user.uid + ":" + newKey.body.id,
+          parseInt(+new Date() / 1000) + 86400
+        );
+
+        return {
+          statusCode: newKey.statusCode,
+          authKeyID: newKey.body ? newKey.body.id : null,
+          role: roleMapping.body[user.uid].roles
+        };
+      } else {
+        return { statusCode: oldKey.statusCode, authKeyID: null, role: [] };
+      }
     }
   }
 };
 const updateRoles = async (newRoles, username, email, name) => {
-  var response = await authClient(
-    process.env.ES_USER,
-    process.env.ES_PASSWORD
-  ).security.putUser({
+  const client = createSuperUserClient();
+
+  var response = await client.security.putUser({
     username: username,
     refresh: "wait_for",
     body: {

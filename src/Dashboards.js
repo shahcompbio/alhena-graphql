@@ -41,8 +41,10 @@ var collator = new Intl.Collator(undefined, {
   numeric: true,
   sensitivity: "base"
 });
+
 const getAllDashboards = async client => {
   var response = await client.security.getRole({});
+
   return Object.keys(response.body)
     .filter(role => role.indexOf("_dashboardReader") !== -1)
     .map(role => {
@@ -67,10 +69,8 @@ const updateDashboard = async (name, indices) => {
   return created;
 };
 const getUserRoles = async username => {
-  var response = await authClient(
-    process.env.ES_USER,
-    process.env.ES_PASSWORD
-  ).security.getUser({ username: username });
+  const client = createSuperUserClient();
+  var response = await client.security.getUser({ username: username });
   return response.body[username].roles;
 };
 
@@ -102,10 +102,9 @@ const createDashboard = async (name, indices) => {
 };
 
 const getIndices = async () => {
-  var response = await authClient(
-    process.env.ES_USER,
-    process.env.ES_PASSWORD
-  ).search({
+  const client = createSuperUserClient();
+
+  var response = await client.search({
     index: "analyses",
 
     size: 5000
