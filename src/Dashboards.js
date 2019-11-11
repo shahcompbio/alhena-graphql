@@ -11,7 +11,7 @@ import _ from "lodash";
 
 export const schema = gql`
   extend type Query {
-    getDashboards(auth: ApiUser!): [Dashboard]
+    getDashboardsByUser(auth: ApiUser!): [Dashboard]
     getAllDashboards(auth: ApiUser!): [Dashboard]
     getAllIndices: [Index!]
     getIndicesByDashboard(dashboard: String!): [Index]
@@ -34,7 +34,7 @@ export const schema = gql`
   }
   type Dashboard {
     name: String!
-    count: Int!
+    count: Int
   }
 `;
 var collator = new Intl.Collator(undefined, {
@@ -74,12 +74,14 @@ const getUserRoles = async username => {
   return response.body[username].roles;
 };
 
-const getIndicesByDashboard = async name => {
+export const getIndicesByDashboard = async name => {
   const client = createSuperUserClient();
   const roleName = name + "_dashboardReader";
+
   var analyses = await client.security.getRole({
     name: roleName
   });
+
   return analyses.body[roleName].indices[0].names.filter(
     hit => hit !== "analyses"
   );
@@ -106,9 +108,9 @@ const getIndices = async () => {
 
   var response = await client.search({
     index: "analyses",
-
     size: 5000
   });
+
   const indexNames = response.body.hits.hits.map(hit => hit._source.jira_id);
   return [...new Set(indexNames)].sort(collator.compare);
 };
@@ -138,7 +140,7 @@ export const resolvers = {
     allDeleted: root => root.deleted === root.total
   },
   UpdateAcknowledgement: {
-    updated: root => (root.created === false ? true : false)
+    updated: root => root.created
   },
   Query: {
     async updateDashboard(_, { dashboard }) {
@@ -161,24 +163,16 @@ export const resolvers = {
     async getIndicesByDashboard(_, { dashboard }) {
       return await getIndicesByDashboard(dashboard);
     },
-    async getDashboards(_, { auth }) {
-      const authKey = await getRedisApiKey(auth);
-      const apiClient = client(authKey, auth.authKeyID);
-
-      const allDashboards = await getAllDashboards(apiClient);
-
+    async getDashboardsByUser(_, { auth }) {
       const authorizedDashboards = await getUserRoles(auth.uid);
-      const authorizedDashboardsMapping = await authorizedDashboards.reduce(
-        (final, dashboard) => {
-          final[dashboard.split("_")[0]] = true;
-          return final;
-        },
-        {}
-      );
-      const userAllowedPorjects = allDashboards.filter(dashboard =>
-        authorizedDashboardsMapping.hasOwnProperty(dashboard.key)
-      );
-      return userAllowedPorjects;
+      return authorizedDashboards.reduce((final, dashboardName) => {
+        return [
+          ...final,
+          {
+            name: dashboardName.split("_")[0]
+          }
+        ];
+      }, []);
     }
   }
 };

@@ -7,7 +7,8 @@ import client from "./api/client";
 import bodybuilder from "bodybuilder";
 import _ from "lodash";
 
-import { getApiId } from "./Dashboards";
+import { createSuperUserClient } from "./utils.js";
+import { getApiId, getIndicesByDashboard } from "./Dashboards";
 
 const FIELD_HIERARCHY = ["project", "sample_id", "library_id", "jira_id"];
 const FIELD_NAMES = {
@@ -19,15 +20,17 @@ const FIELD_NAMES = {
 
 export const schema = gql`
   extend type Query {
-    analysesTree(filters: [Term]!, auth: ApiUser!): AnalysesTree
-    analysesList(filters: [Term]!, auth: ApiUser!): [AnalysisGroup!]
-    analysesStats(filters: [Term]!, auth: ApiUser!): [Stat!]!
+    analyses(filters: [Term]!, auth: ApiUser!, dashboardName: String!): Analyses
   }
   input Term {
     label: String!
     value: String!
   }
-
+  type Analyses {
+    analysesStats: [Stat!]!
+    analysesList: [AnalysisGroup!]
+    analysesTree: AnalysesTree
+  }
   type AnalysesTree {
     source: String
     children: [ParentType!]
@@ -76,7 +79,7 @@ const filterChildren = (root, hierarchyLevel) => {
   return mappedRoot;
 };
 
-async function getAnalyses(filters, auth) {
+const getAnalyses = async (filters, auth, dashboardName) => {
   const baseQuery = bodybuilder().size(10000);
 
   const query =
@@ -89,15 +92,24 @@ async function getAnalyses(filters, auth) {
             baseQuery
           )
           .build();
-
   const authKey = await redis.get(auth.uid + ":" + auth.authKeyID);
-
   const data = await client(authKey, auth.authKeyID).search({
     index: "analyses",
     body: query
   });
-  return data["body"]["hits"]["hits"].map(hit => hit["_source"]);
-}
+
+  const allowedIndices = await getIndicesByDashboard(dashboardName);
+  const allowedIndicesObj = allowedIndices.reduce((final, index) => {
+    final[index] = true;
+    return final;
+  }, {});
+
+  const allowedAnalyses = data["body"]["hits"]["hits"]
+    .map(hit => hit["_source"])
+    .filter(analysis => allowedIndicesObj.hasOwnProperty(analysis.jira_id));
+
+  return allowedAnalyses;
+};
 
 const getUniqueValuesInKey = (list, key) =>
   list
@@ -109,6 +121,11 @@ const getUniqueValuesInKey = (list, key) =>
     );
 
 export const resolvers = {
+  Analyses: {
+    analysesStats: root => root.stats,
+    analysesList: root => root.list,
+    analysesTree: root => root.tree
+  },
   NodeType: {
     target: root => root.target,
     __resolveType(event, context, info) {
@@ -142,42 +159,25 @@ export const resolvers = {
     value: root => root.value
   },
   Query: {
-    analysesTree: async (_, { filters, auth }) => {
-      const data = await getAnalyses(filters, auth);
-      return data;
-    },
-
-    analysesList: async (_, { filters, auth }) => {
-      const data = await getAnalyses(filters, auth);
-
-      const uniqueValuesInHierarchy = FIELD_HIERARCHY.map(field => {
-        const values = getUniqueValuesInKey(data, field);
-
-        return {
-          label: FIELD_NAMES[field],
-          type: field,
-          values: values
-        };
-      });
-
-      return uniqueValuesInHierarchy;
-    },
-
-    analysesStats: async (_, { filters, auth }) => {
-      const data = await getAnalyses(filters, auth);
-
-      // Return count of each thing in the hierarchy
+    analyses: async (_, { filters, auth, dashboardName }) => {
+      const data = await getAnalyses(filters, auth, dashboardName);
 
       const counts = FIELD_HIERARCHY.map(field => {
         const values = getUniqueValuesInKey(data, field);
 
         return {
           label: FIELD_NAMES[field],
-          value: values.length
+          value: values.length,
+          type: field,
+          values: values
         };
       });
 
-      return counts;
+      return {
+        tree: data,
+        list: counts,
+        stats: counts
+      };
     }
   }
 };

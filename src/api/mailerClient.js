@@ -40,7 +40,7 @@ const mailer = async recipient => {
 
   return new Promise((resolve, reject) => {
     readHTMLFile(
-      __dirname + "/utils/emailTemplates/newUserTemplate.html",
+      __dirname + "/utils/emailTemplates/newUserTemplate2.html",
       async function(err, html) {
         var template = handlebars.compile(html);
         var replacements = {

@@ -87,7 +87,7 @@ const createNewUser = async user => {
       password: user.password,
       full_name: user.name,
       email: user.email,
-      roles: [...roles.split(",")]
+      roles: [...roles.split(",").map(role => role + "_dashboardReader")]
     }
   });
 
@@ -112,19 +112,20 @@ const getUsers = async auth => {
       : [];
   return users;
 };
+const incompleteLogin = statusCode => {
+  return { statusCode: statusCode, authKeyID: null, role: [] };
+};
 const login = async user => {
   const isPasswordCorrect = await authClient(user.uid, user.password).search({
     index: "analyses",
     size: 1
   });
-
-  if (isPasswordCorrect.body.statusCode === 200) {
-    const client = authClient(process.env.ES_USER, process.env.ES_PASSWORD);
-
+  if (isPasswordCorrect.statusCode === 200) {
+    const client = createSuperUserClient();
     const result = await client.security.getApiKey({
-      username: user.uid
+      name: "login-" + user.uid
     });
-    //wrong auth
+
     if (result.statusCode === 200) {
       //if keys invalidate
       var oldKey;
@@ -135,29 +136,40 @@ const login = async user => {
       }
       if ((oldKey && oldKey.statusCode === 200) || oldKey === undefined) {
         const newKey = await client.security.createApiKey({
-          body: { name: "login-" + user.uid, expiration: "1d" }
+          body: {
+            name: "login-" + user.uid,
+            expiration: "1d"
+          },
+          refresh: "wait_for"
         });
-        const roleMapping = await client.security.getUser({
-          username: user.uid
-        });
 
-        //store in local sotrage to expire tomorrow
-        redis.set(user.uid + ":" + newKey.body.id, newKey.body.api_key);
+        if (newKey.statusCode === 200) {
+          const roleMapping = await client.security.getUser({
+            username: user.uid
+          });
 
-        redis.expireat(
-          user.uid + ":" + newKey.body.id,
-          parseInt(+new Date() / 1000) + 86400
-        );
+          //store in local sotrage to expire tomorrow
+          redis.set(user.uid + ":" + newKey.body.id, newKey.body.api_key);
 
-        return {
-          statusCode: newKey.statusCode,
-          authKeyID: newKey.body ? newKey.body.id : null,
-          role: roleMapping.body[user.uid].roles
-        };
+          redis.expireat(
+            user.uid + ":" + newKey.body.id,
+            parseInt(+new Date() / 1000) + 86400
+          );
+
+          return {
+            statusCode: newKey.statusCode,
+            authKeyID: newKey.body ? newKey.body.id : null,
+            role: roleMapping.body[user.uid].roles
+          };
+        } else {
+          return incompleteLogin(newKey.statusCode);
+        }
       } else {
-        return { statusCode: oldKey.statusCode, authKeyID: null, role: [] };
+        return incompleteLogin(newKey.statusCode);
       }
     }
+  } else {
+    return incompleteLogin(isPasswordCorrect.statusCode);
   }
 };
 const updateRoles = async (newRoles, username, email, name) => {
