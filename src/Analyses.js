@@ -48,7 +48,6 @@ export const schema = gql`
     target: String!
     value: Int!
   }
-
   type AnalysisGroup {
     label: String!
     type: String!
@@ -106,9 +105,18 @@ const getAnalyses = async (filters, auth, dashboardName) => {
 
   const allowedAnalyses = data["body"]["hits"]["hits"]
     .map(hit => hit["_source"])
-    .filter(analysis => allowedIndicesObj.hasOwnProperty(analysis.jira_id));
-
-  return allowedAnalyses;
+    .filter(analysis => allowedIndicesObj.hasOwnProperty(analysis.jira_id))
+    .map(analysis => {
+      analysis["project"] = dashboardName;
+      return analysis;
+    });
+  const labelsObj = {
+    project: dashboardName,
+    sample_id: "Samples",
+    library_id: "Libraries",
+    jira_id: "Jira ID"
+  };
+  return [...allowedAnalyses, labelsObj];
 };
 
 const getUniqueValuesInKey = (list, key) =>

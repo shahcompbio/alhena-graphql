@@ -21,6 +21,7 @@ const transporter = (host, port, user, password) =>
     host: host,
     port: port,
     secure: false, // upgrade later with STARTTLS
+    logger: true,
     auth: {
       user: user,
       pass: password
@@ -35,10 +36,12 @@ const mailer = async recipient => {
   var tomorrow = oneDayExpiryDate();
   var path = generateSecurePathHash(tomorrow, "/NewAccount", "enigma");
 
-  var homePath = "http://" + process.env.SERVER_NAME + "/NewAccount/";
+  var homePath = "https://" + process.env.SERVER_NAME + "/NewAccount/";
   var secureUrl = "md5=" + path + "&expires=" + tomorrow;
 
   return new Promise((resolve, reject) => {
+    console.log(process.env.MAIL_HOST);
+    console.log(process.env.MAIL_PORT);
     readHTMLFile(
       __dirname + "/utils/emailTemplates/newUserTemplate2.html",
       async function(err, html) {
@@ -57,14 +60,7 @@ const mailer = async recipient => {
           from: process.env.ADMIN_EMAIL,
           to: recipient.email,
           subject: "Create Account",
-          html: htmlToSend,
-          attachments: [
-            {
-              filename: "logo.png",
-              path: __dirname + "/utils/images/logo.png",
-              cid: "logo"
-            }
-          ]
+          html: htmlToSend
         });
 
         resolve({ response: response, secureUrl: secureUrl });

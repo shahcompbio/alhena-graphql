@@ -1,4 +1,3 @@
-export default mailer;
 import redis from "./api/redisClient.js";
 const { gql, AuthenticationError } = require("apollo-server");
 
