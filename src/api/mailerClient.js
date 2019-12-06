@@ -33,22 +33,19 @@ const transporter = (host, port, user, password) =>
   });
 
 const mailer = async recipient => {
-  var tomorrow = oneDayExpiryDate();
-  var path = generateSecurePathHash(tomorrow, "/NewAccount", "enigma");
-
+  //var tomorrow = oneDayExpiryDate();
+  var extension = "newUser";
+  var secureUrl = generateSecurePathHash(extension, "createNewUserAlhena");
   var homePath = "https://" + process.env.SERVER_NAME + "/NewAccount/";
-  var secureUrl = "md5=" + path + "&expires=" + tomorrow;
 
   return new Promise((resolve, reject) => {
-    console.log(process.env.MAIL_HOST);
-    console.log(process.env.MAIL_PORT);
     readHTMLFile(
       __dirname + "/utils/emailTemplates/newUserTemplate2.html",
       async function(err, html) {
         var template = handlebars.compile(html);
         var replacements = {
           name: recipient.name,
-          secureUrl: homePath + secureUrl
+          secureUrl: homePath + secureUrl + "/" + extension
         };
         var htmlToSend = template(replacements);
         var response = await transporter(

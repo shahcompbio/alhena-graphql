@@ -27,14 +27,14 @@ export const resolvers = {
       var mailResponse = await mailer(recipient);
 
       if (mailResponse.response.accepted.length > 0) {
-        await redis.set(
+        /*await redis.set(
           mailResponse.secureUrl,
           mailResponse.response.accepted[0]
         );
         await redis.expireat(
           mailResponse.secureUrl,
           parseInt(+new Date() / 1000) + 86400
-        );
+        );*/
 
         //store user roles
 
