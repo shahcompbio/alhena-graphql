@@ -32,12 +32,7 @@ const transporter = (host, port, user, password) =>
     }
   });
 
-const mailer = async recipient => {
-  //var tomorrow = oneDayExpiryDate();
-  var extension = "newUser";
-  var secureUrl = generateSecurePathHash(extension, "createNewUserAlhena");
-  var homePath = "https://" + process.env.SERVER_NAME + "/NewAccount/";
-
+const mailer = async (recipient, secureUrl) => {
   return new Promise((resolve, reject) => {
     readHTMLFile(
       __dirname + "/utils/emailTemplates/newUserTemplate2.html",
@@ -45,7 +40,7 @@ const mailer = async recipient => {
         var template = handlebars.compile(html);
         var replacements = {
           name: recipient.name,
-          secureUrl: homePath + secureUrl + "/" + extension
+          secureUrl: secureUrl
         };
         var htmlToSend = template(replacements);
         var response = await transporter(

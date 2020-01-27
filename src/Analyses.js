@@ -14,8 +14,8 @@ const FIELD_HIERARCHY = ["project", "sample_id", "library_id", "jira_id"];
 const FIELD_NAMES = {
   project: "Project",
   sample_id: "Sample ID",
-  library_id: "Library ID",
-  jira_id: "Jira ID"
+  library_id: "Library",
+  jira_id: "Analysis ID"
 };
 
 export const schema = gql`
@@ -110,13 +110,8 @@ const getAnalyses = async (filters, auth, dashboardName) => {
       analysis["project"] = dashboardName;
       return analysis;
     });
-  const labelsObj = {
-    project: dashboardName,
-    sample_id: "Samples",
-    library_id: "Libraries",
-    jira_id: "Jira ID"
-  };
-  return [...allowedAnalyses, labelsObj];
+
+  return [...allowedAnalyses];
 };
 
 const getUniqueValuesInKey = (list, key) =>

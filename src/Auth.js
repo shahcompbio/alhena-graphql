@@ -208,7 +208,9 @@ export const resolvers = {
       return await createNewUser(user);
     },
     verifyNewUserUri: async (_, { key }) => {
-      return await verifyUriKey(key);
+      const email = await verifyUriKey(key);
+
+      return { email: email };
     },
     deleteUser: async (_, { username }) => {
       return await deleteUser(username);
@@ -225,8 +227,8 @@ export const resolvers = {
     email: ({ email }) => email
   },
   NewUserAcknowledgement: {
-    isValid: root => (root ? true : false),
-    email: root => root
+    isValid: root => (root.email ? true : false),
+    email: root => root.email
   },
   DeletionAcknowledgement: {
     isDeleted: root => root.found
