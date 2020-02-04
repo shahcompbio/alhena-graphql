@@ -94,13 +94,14 @@ export const resolvers = {
         }
       });
 
-      return results.aggregations.chrom_ranges.buckets;
+      return results.body.aggregations.chrom_ranges.buckets;
     },
     async bins(_, { analysis, id }) {
       return await getBinsForID(analysis, id);
     },
     async categoriesStats(_, { analysis }) {
       const queryResults = await getAllCategoryStats(analysis);
+
       return Object.keys(queryResults).map(key => {
         return { category: key, types: queryResults[key].buckets };
       });
@@ -120,7 +121,7 @@ export const resolvers = {
 
     async segs(_, { analysis, indices, quality }) {
       const results = await getIDsForIndices(analysis, indices, quality);
-      return results.hits.hits.map(id => ({ ...id, analysis }));
+      return results.body.hits.hits.map(id => ({ ...id, analysis }));
     }
   },
   Bin: {
@@ -216,7 +217,7 @@ async function getAllHeatmapOrder(analysis, quality) {
       }
     }
   });
-  return results.hits.hits;
+  return results.body.hits.hits;
 }
 async function getAllCategoryStats(analysis) {
   const results = await client.search({
@@ -261,7 +262,7 @@ async function getAllCategoryStats(analysis) {
       }
     }
   });
-  return results.aggregations;
+  return results.body.aggregations;
 }
 async function getCellStats(analysis, indices) {
   const results = await client.search({
@@ -314,7 +315,7 @@ async function getCellStats(analysis, indices) {
       }
     }
   });
-  return results;
+  return results.body;
 }
 async function getMaxState(analysis) {
   const results = await client.search({
@@ -345,7 +346,7 @@ async function getMaxState(analysis) {
       }
     }
   });
-  return results.aggregations.integer_median.value;
+  return results.body.aggregations.integer_median.value;
 }
 
 /*********
@@ -381,7 +382,7 @@ async function getBinsForID(index, id) {
       }
     }
   });
-  return results.hits.hits.map(seg => seg["_source"]);
+  return results.body.hits.hits.map(seg => seg["_source"]);
 }
 /*********
  * Segs
@@ -478,5 +479,5 @@ async function getSegsForID(index, id) {
     }
   });
 
-  return results.hits.hits.map(seg => seg["_source"]);
+  return results.body.hits.hits.map(seg => seg["_source"]);
 }
