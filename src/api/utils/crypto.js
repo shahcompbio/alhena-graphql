@@ -1,11 +1,16 @@
 var crypto = require("crypto");
 
-const generateSecurePathHash = (expires, url, secret) => {
-  if (!expires || !url || !secret) {
+const generateSecurePathHash = (url, secret) => {
+  if (!url || !secret) {
     return undefined;
   }
 
-  var input = expires + url + " " + secret;
+  var input = url + secret;
+  /*  return crypto
+    .createHash("md5")
+    .update(input)
+    .digest("hex");*/
+
   var binaryHash = crypto
     .createHash("md5")
     .update(input)

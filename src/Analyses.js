@@ -14,8 +14,8 @@ const FIELD_HIERARCHY = ["project", "sample_id", "library_id", "jira_id"];
 const FIELD_NAMES = {
   project: "Project",
   sample_id: "Sample ID",
-  library_id: "Library ID",
-  jira_id: "Jira ID"
+  library_id: "Library",
+  jira_id: "Analysis ID"
 };
 
 export const schema = gql`
@@ -48,7 +48,6 @@ export const schema = gql`
     target: String!
     value: Int!
   }
-
   type AnalysisGroup {
     label: String!
     type: String!
@@ -106,9 +105,13 @@ const getAnalyses = async (filters, auth, dashboardName) => {
 
   const allowedAnalyses = data["body"]["hits"]["hits"]
     .map(hit => hit["_source"])
-    .filter(analysis => allowedIndicesObj.hasOwnProperty(analysis.jira_id));
+    .filter(analysis => allowedIndicesObj.hasOwnProperty(analysis.jira_id))
+    .map(analysis => {
+      analysis["project"] = dashboardName;
+      return analysis;
+    });
 
-  return allowedAnalyses;
+  return [...allowedAnalyses];
 };
 
 const getUniqueValuesInKey = (list, key) =>

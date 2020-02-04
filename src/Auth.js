@@ -78,20 +78,24 @@ const deleteUser = async username => {
 
 const createNewUser = async user => {
   var roles = await redis.get("roles_" + user.email);
-  const client = createSuperUserClient();
+  if (roles === null) {
+    return false;
+  } else {
+    const client = createSuperUserClient();
 
-  var response = await client.security.putUser({
-    username: user.username,
-    refresh: "wait_for",
-    body: {
-      password: user.password,
-      full_name: user.name,
-      email: user.email,
-      roles: [...roles.split(",").map(role => role + "_dashboardReader")]
-    }
-  });
+    var response = await client.security.putUser({
+      username: user.username,
+      refresh: "wait_for",
+      body: {
+        password: user.password,
+        full_name: user.name,
+        email: user.email,
+        roles: [...roles.split(",").map(role => role + "_dashboardReader")]
+      }
+    });
 
-  return response.body;
+    return response.body;
+  }
 };
 const getUsers = async auth => {
   const authKey = await redis.get(auth.uid + ":" + auth.authKeyID);
@@ -204,7 +208,9 @@ export const resolvers = {
       return await createNewUser(user);
     },
     verifyNewUserUri: async (_, { key }) => {
-      return await verifyUriKey(key);
+      const email = await verifyUriKey(key);
+
+      return { email: email };
     },
     deleteUser: async (_, { username }) => {
       return await deleteUser(username);
@@ -221,8 +227,8 @@ export const resolvers = {
     email: ({ email }) => email
   },
   NewUserAcknowledgement: {
-    isValid: root => (root ? true : false),
-    email: root => root
+    isValid: root => (root.email ? true : false),
+    email: root => root.email
   },
   DeletionAcknowledgement: {
     isDeleted: root => root.found

@@ -1,3 +1,4 @@
+require("dotenv").config();
 import authClient from "./api/authClient";
 import redis from "./api/redisClient.js";
 
