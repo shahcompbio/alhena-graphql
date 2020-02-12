@@ -10,6 +10,7 @@ import * as dashboards from "./Dashboards.js";
 import * as auth from "./Auth.js";
 import * as mailer from "./Mailer.js";
 import * as chipHeatmap from "./ChipHeatmap.js";
+import * as gcBias from "./GCBias.js";
 
 import { makeExecutableSchema } from "graphql-tools";
 import { merge } from "lodash";
@@ -27,7 +28,8 @@ const schema = makeExecutableSchema({
     auth.schema,
     mailer.schema,
     heatmap.schema,
-    chipHeatmap.schema
+    chipHeatmap.schema,
+    gcBias.schema
   ],
   resolvers: merge(
     analyses.resolvers,
@@ -35,7 +37,8 @@ const schema = makeExecutableSchema({
     auth.resolvers,
     mailer.resolvers,
     heatmap.resolvers,
-    chipHeatmap.resolvers
+    chipHeatmap.resolvers,
+    gcBias.resolvers
   ),
   inheritResolversFromInterfaces: true
 });

@@ -24,9 +24,9 @@ export const schema = gql`
 export const resolvers = {
   Query: {
     sendMail: async (_, { recipient }) => {
-      const extension = "newUser";
-      var secureUrl = generateSecurePathHash(extension, "createNewUserAlhena");
-      var homePath = "https://" + process.env.SERVER_NAME + "/NewAccount/";
+      //    const extension = "newUser";
+      //    var secureUrl = generateSecurePathHash(extension, "createNewUserAlhena");
+      var homePath = "https://" + process.env.SERVER_NAME + "/NewAccount";
       const redisSecretHash =
         Math.random()
           .toString(36)
@@ -35,15 +35,15 @@ export const resolvers = {
           .toString(36)
           .substring(2, 15);
 
-      const finalUrl = homePath + secureUrl + "/" + redisSecretHash;
+      //  const finalUrl = homePath + secureUrl + "/" + redisSecretHash;
+      const finalUrl = homePath + "/" + redisSecretHash;
 
-      console.log(redisSecretHash);
       var mailResponse = await mailer(recipient, finalUrl);
 
       if (mailResponse.response.accepted.length > 0) {
         await redis.set(redisSecretHash, recipient.email);
         await redis.expireat(
-          mailResponse.secureUrl,
+          redisSecretHash,
           parseInt(+new Date() / 1000) + 86400
         );
 

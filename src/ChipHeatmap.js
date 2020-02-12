@@ -18,6 +18,7 @@ export const schema = gql`
     columnIndex: Int
     rowIndex: Int
     cellId: String
+    heatmapOrder: Int
     totalMappedReads: String
   }
 `;
@@ -47,6 +48,10 @@ export const resolvers = {
   Square: {
     columnIndex: root => root.colIndex,
     rowIndex: root => root.key,
+    heatmapOrder: root =>
+      root.heatmap_order.buckets.length > 0
+        ? root.heatmap_order.buckets[0].key
+        : null,
     cellId: root => root.cell_id.buckets[0].key,
     totalMappedReads: root => root.total_mapped_reads.value
   }
@@ -79,10 +84,13 @@ const getChipHeatmap = async (analysis, quality) => {
                 cell_id: {
                   terms: {
                     size: 1000,
-                    field: "cell_id",
-                    order: {
-                      _term: "asc"
-                    }
+                    field: "cell_id"
+                  }
+                },
+                heatmap_order: {
+                  terms: {
+                    size: 1000,
+                    field: "all_heatmap_order"
                   }
                 },
                 total_mapped_reads: {
@@ -93,10 +101,7 @@ const getChipHeatmap = async (analysis, quality) => {
                 experimental_condition: {
                   terms: {
                     size: 1000,
-                    field: "experimental_condition",
-                    order: {
-                      _term: "asc"
-                    }
+                    field: "experimental_condition"
                   }
                 }
               }
