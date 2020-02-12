@@ -107,6 +107,5 @@ const getGcBias = async (analysis, quality) => {
       }
     }
   });*/
-  console.log(json);
   return json;
 };
