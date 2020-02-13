@@ -54,58 +54,5 @@ export const resolvers = {
   }
 };
 const getGcBias = async (analysis, quality) => {
-  /*const results = await client.search({
-    index: analysis.toLowerCase(),
-    size: 10000,
-    body: {
-      fields: [
-        "gc_percent",
-        "median",
-        "high_ci",
-        "low_ci",
-        "experimental_condition"
-      ],
-      aggs: {
-        xStats: { stats: { field: "gc_percent" } },
-        yStats: { stats: { field: "median" } },
-        subsetNames: { terms: { field: "experimental_condition", size: 10000 } }
-      },
-      sort: [{ gc_percent: { order: "asc" } }],
-      query: {
-        filtered: {
-          filter: {
-            bool: {
-              must: [
-                { terms: { sample_id: [analysis] } },
-                { exists: { field: "gc_percent" } },
-                { exists: { field: "median" } },
-                { range: { median: { lte: 2 } } }
-              ]
-            }
-          },
-          query: {
-            filtered: {
-              filter: {
-                bool: {
-                  must: [
-                    {
-                      range: {
-                        quality: {
-                          gte: quality
-                        }
-                      }
-                    }
-                  ]
-                }
-              },
-              query: {
-                match_all: {}
-              }
-            }
-          }
-        }
-      }
-    }
-  });*/
   return json;
 };
