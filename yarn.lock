@@ -1606,10 +1606,10 @@ body-parser@1.19.0, body-parser@^1.18.3:
     raw-body "2.4.0"
     type-is "~1.6.17"
 
-bodybuilder@^2.2.17:
-  version "2.2.17"
-  resolved "https://registry.yarnpkg.com/bodybuilder/-/bodybuilder-2.2.17.tgz#26600c9e5e493ea09484d1dc1815ae2fd9f9c2d9"
-  integrity sha512-k6em1H73zJS7LtCdcYB/88U8OIV0Z7eDh6SWBn3r7kZ/tw+hI58cK+6w6mnpCvGUcMrIDd0skf+z2bgLkx/Uug==
+bodybuilder@^2.2.20:
+  version "2.2.20"
+  resolved "https://registry.yarnpkg.com/bodybuilder/-/bodybuilder-2.2.20.tgz#df593e73e3ba505931020b4e40d6dbb49c7b5122"
+  integrity sha512-yHxV/UrGBoA0pkEYsCmZ7TuONPJ/+LWIqBhNWT87bSwRH1lcSkzQHnMSuZm7wSJiltzlzALgF6301Xeaq5Hbfg==
   dependencies:
     lodash "^4.17.11"
 
