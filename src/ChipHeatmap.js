@@ -136,6 +136,5 @@ const getChipHeatmap = async (analysis, quality) => {
       }
     }
   });
-  console.log(results.body.aggregations);
   return results.body.aggregations;
 };
