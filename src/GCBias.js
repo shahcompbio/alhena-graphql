@@ -3,7 +3,6 @@ const { gql } = require("apollo-server");
 import _ from "lodash";
 import client from "./api/montageClient.js";
 import bodybuilder from "bodybuilder";
-var json = require("./gcbias.json");
 export const schema = gql`
   extend type Query {
     gcBias(analysis: String, quality: String!, cellIDs: [String!]): GCBias
