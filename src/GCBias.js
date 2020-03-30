@@ -1,11 +1,14 @@
 const { gql } = require("apollo-server");
 
 import _ from "lodash";
-import client from "./api/montageClient.js";
+
+import { createSuperUserClient } from "./utils.js";
+//import client from "./api/localClient.js";
+
 import bodybuilder from "bodybuilder";
 export const schema = gql`
   extend type Query {
-    gcBias(analysis: String, quality: String!, cellIDs: [String!]): GCBias
+    gcBias(analysis: String, quality: String!, selectionOrder: [Int!]): GCBias
   }
   type GCBias {
     stats: GCStats
@@ -28,12 +31,12 @@ export const schema = gql`
 
 export const resolvers = {
   Query: {
-    async gcBias(_, { analysis, quality, cellIDs }) {
-      return await getGcBias(analysis, quality, cellIDs);
+    async gcBias(_, { analysis, quality, selectionOrder }) {
+      return await getGcBias(analysis, quality, selectionOrder);
     }
   },
   GCBias: {
-    stats: root => root["agg_stats_value"],
+    stats: root => root,
     gcCells: root => root["agg_terms_gc_percent"]["buckets"]
   },
   GCCell: {
@@ -47,32 +50,41 @@ export const resolvers = {
       const { avg, count, std_deviation } = root["agg_extended_stats_value"];
       return avg - (1.96 * std_deviation) / Math.sqrt(count);
     },
-    median: root => root["agg_percentiles_value"]["values"]["50.0"]
+    median: root => root["agg_extended_stats_value"]["avg"]
   },
 
   GCStats: {
-    yMax: root => root.max,
-    yMin: root => root.min,
+    yMax: root => {
+      const viewingMax = root["agg_percentiles_value"]["values"]["75.0"];
+      return viewingMax + viewingMax / 10;
+    },
+    yMin: root => root["agg_stats_value"].min,
     xMax: root => 0,
     xMin: root => 100
   }
 };
-async function getGcBias(analysis, quality, cellIDs) {
-  const cellIDQuery = bodybuilder()
-    .size(10000)
-    .filter("range", "quality", { gte: parseFloat(quality) })
-    .build();
+async function getGcBias(analysis, quality, selectionOrder) {
+  const client = createSuperUserClient();
+  const cellIDQuery = selectionOrder
+    ? bodybuilder()
+        .size(10000)
+        .filter("range", "quality", { gte: parseFloat(quality) })
+        .filter("terms", "order", selectionOrder)
+        .build()
+    : bodybuilder()
+        .size(10000)
+        .filter("range", "quality", { gte: parseFloat(quality) })
+        .build();
 
   const cellIDResults = await client.search({
     index: `${analysis.toLowerCase()}_qc`,
     body: cellIDQuery
   });
 
-  const filteredCellIDs = cellIDs
-    ? cellIDs
-    : cellIDResults["body"]["hits"]["hits"].map(
-        record => record["_source"]["cell_id"]
-      );
+  const filteredCellIDs = cellIDResults["body"]["hits"]["hits"].map(
+    record => record["_source"]["cell_id"]
+  );
+
   const query = bodybuilder()
     .size(0)
     .filter("terms", "cell_id", filteredCellIDs)
@@ -82,6 +94,7 @@ async function getGcBias(analysis, quality, cellIDs) {
         .aggregation("percentiles", "value")
     )
     .aggregation("stats", "value")
+    .aggregation("percentiles", "value")
     .build();
 
   const results = await client.search({

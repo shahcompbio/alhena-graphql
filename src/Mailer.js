@@ -15,7 +15,8 @@ export const schema = gql`
     roles: String!
   }
   type Response {
-    response: String!
+    newUserLink: String
+    response: String
     rejected: [String]
     accepted: [String]
   }
@@ -38,27 +39,29 @@ export const resolvers = {
       //  const finalUrl = homePath + secureUrl + "/" + redisSecretHash;
       const finalUrl = homePath + "/" + redisSecretHash;
 
-      var mailResponse = await mailer(recipient, finalUrl);
+      //  var mailResponse = await mailer(recipient, finalUrl);
 
-      if (mailResponse.response.accepted.length > 0) {
-        await redis.set(redisSecretHash, recipient.email);
-        await redis.expireat(
-          redisSecretHash,
-          parseInt(+new Date() / 1000) + 86400
-        );
+      //  if (mailResponse.response.accepted.length > 0) {
+      await redis.set(redisSecretHash, recipient.email);
+      await redis.expireat(
+        redisSecretHash,
+        parseInt(+new Date() / 1000) + 86400
+      );
 
-        //store user roles
+      //store user roles
 
-        await redis.set("roles_" + recipient.email, recipient.roles);
-        await redis.expireat(
-          "roles_" + recipient.email,
-          parseInt(+new Date() / 1000) + 86400
-        );
-      }
-      return mailResponse.response;
+      await redis.set("roles_" + recipient.email, recipient.roles);
+      await redis.expireat(
+        "roles_" + recipient.email,
+        parseInt(+new Date() / 1000) + 86400
+      );
+      //  }
+      return finalUrl;
+      //return mailResponse.response;
     }
   },
   Response: {
+    newUserLink: root => root,
     response: root => root.messageId,
     rejected: root => root.rejected,
     accepted: root => root.accepted

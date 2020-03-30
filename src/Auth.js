@@ -15,13 +15,17 @@ export const schema = gql`
     getUsers(auth: ApiUser!): [AppUsers]
     createNewUser(user: NewUser!): CreationAcknowledgement
     verifyNewUserUri(key: String!): NewUserAcknowledgement
+    verifyPasswordResetUri(key: String!): NewUserAcknowledgement
     updateUserRoles(
       newRoles: [String!]
       username: String!
       email: String!
       name: String!
     ): CreationAcknowledgement
+    doesUserExist(username: String!, email: String!): Confirmation
     deleteUser(username: String!): DeletionAcknowledgement
+    allowResetPassword(username: String!): ConfirmationHashLink
+    changePassword(username: String!, newPassword: String!): Acknowledgement
   }
   input NewUser {
     username: String!
@@ -47,9 +51,19 @@ export const schema = gql`
     email: String
     enabled: String
   }
+  type Confirmation {
+    confirmed: Boolean
+  }
+  type ConfirmationHashLink {
+    hashLink: String
+  }
+  type Acknowledgement {
+    confirmed: Boolean
+  }
   type NewUserAcknowledgement {
     isValid: Boolean!
     email: String
+    username: String
   }
   type DeletionAcknowledgement {
     isDeleted: Boolean
@@ -65,6 +79,46 @@ export const schema = gql`
 `;
 
 const verifyUriKey = async key => await redis.get(key);
+
+const checkUserExistance = async (username, email) => {
+  const client = createSuperUserClient();
+  const retrievedUser = await client.security.getUser(
+    {
+      username: username
+    },
+    { ignore: [404] }
+  );
+
+  return retrievedUser.statusCode === 404
+    ? false
+    : retrievedUser["body"][username]["email"] === email;
+};
+const allowResetPassword = async username => {
+  const redisSecretHash =
+    Math.random()
+      .toString(36)
+      .substring(2, 15) +
+    Math.random()
+      .toString(36)
+      .substring(2, 15);
+  await redis.set(redisSecretHash, username);
+  await redis.expireat(redisSecretHash, parseInt(+new Date() / 1000) + 86400);
+  return (
+    "https://" + process.env.SERVER_NAME + "/resetPassword/" + redisSecretHash
+  );
+};
+const updatePassword = async (username, newPassword) => {
+  const client = createSuperUserClient();
+
+  var response = await client.security.changePassword({
+    username: username,
+    refresh: "wait_for",
+    body: {
+      password: newPassword
+    }
+  });
+  return response.statusCode;
+};
 
 const deleteUser = async username => {
   const client = createSuperUserClient();
@@ -124,6 +178,7 @@ const login = async user => {
     index: "analyses",
     size: 1
   });
+
   if (isPasswordCorrect.statusCode === 200) {
     const client = createSuperUserClient();
     const result = await client.security.getApiKey({
@@ -198,22 +253,34 @@ const updateRoles = async (newRoles, username, email, name) => {
 };
 export const resolvers = {
   Query: {
-    login: async (_, { user }) => {
-      return await login(user);
+    allowResetPassword: async (_, { username }) => {
+      return await allowResetPassword(username);
     },
-    getUsers: async (_, { auth }) => {
-      return await getUsers(auth);
+    changePassword: async (_, { username, newPassword }) => {
+      return await updatePassword(username, newPassword);
     },
     createNewUser: async (_, { user }) => {
       return await createNewUser(user);
     },
-    verifyNewUserUri: async (_, { key }) => {
-      const email = await verifyUriKey(key);
-
-      return { email: email };
-    },
     deleteUser: async (_, { username }) => {
       return await deleteUser(username);
+    },
+    doesUserExist: async (_, { username, email }) => {
+      return await checkUserExistance(username, email);
+    },
+    getUsers: async (_, { auth }) => {
+      return await getUsers(auth);
+    },
+    login: async (_, { user }) => {
+      return await login(user);
+    },
+    verifyPasswordResetUri: async (_, { key }) => {
+      const username = await verifyUriKey(key);
+      return { username: username };
+    },
+    verifyNewUserUri: async (_, { key }) => {
+      const email = await verifyUriKey(key);
+      return { email: email };
     },
     updateUserRoles: async (_, { newRoles, username, email, name }) => {
       return await updateRoles(newRoles, username, email, name);
@@ -226,9 +293,19 @@ export const resolvers = {
     enabled: ({ enabled }) => enabled.toString(),
     email: ({ email }) => email
   },
+  Confirmation: {
+    confirmed: root => root
+  },
+  ConfirmationHashLink: {
+    hashLink: root => root
+  },
+  Acknowledgement: {
+    confirmed: root => root === 200
+  },
   NewUserAcknowledgement: {
-    isValid: root => (root.email ? true : false),
-    email: root => root.email
+    isValid: root => (root.email || root.username ? true : false),
+    email: root => root.email,
+    username: root => root.username
   },
   DeletionAcknowledgement: {
     isDeleted: root => root.found
