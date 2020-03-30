@@ -1,7 +1,11 @@
 const { gql } = require("apollo-server");
 
 import _ from "lodash";
-import client from "./api/montageClient.js";
+
+import { createSuperUserClient } from "./utils.js";
+//import client from "./api/localClient.js";
+
+import bodybuilder from "bodybuilder";
 
 export const schema = gql`
   extend type Query {
@@ -65,45 +69,35 @@ export const schema = gql`
 export const resolvers = {
   Query: {
     async chromosomes(_, { analysis }) {
+      const client = createSuperUserClient();
+      const query = bodybuilder()
+        .size(0)
+        .agg(
+          "terms",
+          "chrom_number",
+          { size: 50000, order: { _term: "asc" } },
+          a => a.agg("max", "end").agg("min", "start")
+        )
+        .build();
+
       const results = await client.search({
-        index: analysis.toLowerCase(),
-        body: {
-          size: 0,
-          aggs: {
-            chrom_ranges: {
-              terms: {
-                field: "chrom_number",
-                size: 50000,
-                //order: { _key: "asc" }
-                order: { _term: "asc" }
-              },
-              aggs: {
-                XMax: {
-                  max: {
-                    field: "end"
-                  }
-                },
-                XMin: {
-                  min: {
-                    field: "start"
-                  }
-                }
-              }
-            }
-          }
-        }
+        index: `${analysis.toLowerCase()}_segs`,
+        body: query
       });
 
-      return results.aggregations.chrom_ranges.buckets;
+      return results.body.aggregations.agg_terms_chrom_number.buckets;
     },
     async bins(_, { analysis, id }) {
       return await getBinsForID(analysis, id);
     },
     async categoriesStats(_, { analysis }) {
       const queryResults = await getAllCategoryStats(analysis);
-      return Object.keys(queryResults).map(key => {
-        return { category: key, types: queryResults[key].buckets };
-      });
+      return ["experimental_condition", "cell_call", "state_mode"].map(
+        category => ({
+          category,
+          types: queryResults[`agg_terms_${category}`].buckets
+        })
+      );
     },
     async analysisStats(_, { analysis, indices }) {
       const cellStats = await getCellStats(analysis, indices);
@@ -111,7 +105,7 @@ export const resolvers = {
       const maxState = await getMaxState(analysis);
       return {
         maxState: maxState,
-        cellStats: cellStats.hits.hits
+        cellStats: cellStats
       };
     },
     async heatmapOrder(_, { analysis, quality }) {
@@ -120,7 +114,7 @@ export const resolvers = {
 
     async segs(_, { analysis, indices, quality }) {
       const results = await getIDsForIndices(analysis, indices, quality);
-      return results.hits.hits.map(id => ({ ...id, analysis }));
+      return results.body.hits.hits.map(id => ({ ...id["_source"], analysis }));
     }
   },
   Bin: {
@@ -136,12 +130,11 @@ export const resolvers = {
     cellStats: root => root.cellStats
   },
   CellStats: {
-    id: root =>
-      root.fields.all_heatmap_order[0] + root.fields.experimental_condition[0],
-    state_mode: root => root.fields.state_mode[0],
-    experimental_condition: root => root.fields.experimental_condition[0],
-    cell_call: root => root.fields.cell_call[0],
-    heatmap_order: root => root.fields.all_heatmap_order[0]
+    id: root => root.order + root.experimental_condition,
+    state_mode: root => root.state_mode,
+    experimental_condition: root => root.experimental_condition,
+    cell_call: root => root.cell_call,
+    heatmap_order: root => root.order
   },
   CategoryStats: {
     category: root => root.category,
@@ -149,21 +142,21 @@ export const resolvers = {
   },
   Chromosome: {
     id: root => root.key,
-    start: root => root.XMin.value,
-    end: root => root.XMax.value
+    start: root => root.agg_min_start.value,
+    end: root => root.agg_max_end.value
   },
   HeatmapOrder: {
-    order: root => root.fields["all_heatmap_order"][0]
+    order: root => root["order"]
   },
   SegRow: {
-    id: root => `${root["_source"].cell_id}`,
-    name: root => root["_source"].cell_id,
-    index: root => root["_source"].all_heatmap_order,
+    id: root => `${root.cell_id}`,
+    name: root => root.cell_id,
+    index: root => root.order,
     segs: async root => {
-      const index = root["_index"].toLowerCase();
-      const id = root["_source"].cell_id;
+      const analysis = root.analysis;
+      const id = root.cell_id;
 
-      return await getSegsForID(index, id);
+      return await getSegsForID(analysis, id);
     }
   },
   Seg: {
@@ -175,308 +168,113 @@ export const resolvers = {
 };
 
 async function getAllHeatmapOrder(analysis, quality) {
+  const client = createSuperUserClient();
+  const query = bodybuilder()
+    .size(50000)
+    .sort("order", "asc")
+    .filter("exists", "order")
+    .filter("range", "quality", { gte: parseFloat(quality) })
+    .build();
   const results = await client.search({
-    index: analysis.toLowerCase(),
-    size: 50000,
-    body: {
-      sort: [
-        {
-          all_heatmap_order: {
-            unmapped_type: "long"
-          }
-        }
-      ],
-      fields: ["all_heatmap_order"],
-      query: {
-        filtered: {
-          filter: {
-            bool: {
-              must: [
-                {
-                  terms: {
-                    caller: ["single_cell_qc"]
-                  }
-                },
-                {
-                  exists: {
-                    field: "all_heatmap_order"
-                  }
-                },
-                {
-                  range: {
-                    quality: {
-                      gte: quality
-                    }
-                  }
-                }
-              ]
-            }
-          }
-        }
-      }
-    }
+    index: `${analysis.toLowerCase()}_qc`,
+    body: query
   });
-  return results.hits.hits;
+  return results.body.hits.hits.map(record => record["_source"]);
 }
 async function getAllCategoryStats(analysis) {
+  const client = createSuperUserClient();
+  const query = bodybuilder()
+    .size(0)
+    .filter("range", "quality", { gte: 0.75 })
+    .agg("terms", "experimental_condition", {
+      size: 1000,
+      order: { _term: "asc" }
+    })
+    .agg("terms", "cell_call", { size: 1000, order: { _term: "asc" } })
+    .agg("terms", "state_mode", { size: 1000, order: { _term: "asc" } })
+    .build();
   const results = await client.search({
-    index: analysis,
-    size: 0,
-    body: {
-      aggs: {
-        experimental_condition: {
-          terms: {
-            size: 1000,
-            field: "experimental_condition",
-            order: { _term: "asc" }
-          }
-        },
-        cell_call: {
-          terms: {
-            size: 1000,
-            field: "cell_call",
-            order: { _term: "asc" }
-          }
-        },
-        mode_state: {
-          terms: {
-            size: 1000,
-            field: "mode_state",
-            order: { _term: "asc" }
-          }
-        }
-      },
-      query: {
-        filtered: {
-          filter: {
-            bool: {
-              must: [
-                { terms: { caller: ["single_cell_qc"] } },
-                { range: { quality: { gte: "0.75" } } }
-              ]
-            }
-          },
-          query: { match_all: {} }
-        }
-      }
-    }
+    index: `${analysis.toLowerCase()}_qc`,
+    body: query
   });
-  return results.aggregations;
+  return results.body.aggregations;
 }
 async function getCellStats(analysis, indices) {
+  const client = createSuperUserClient();
+  const query = bodybuilder()
+    .size(50000)
+    .sort("order", "asc")
+    .filter("exists", "order")
+    .filter("terms", "order", indices)
+    .build();
+
   const results = await client.search({
-    index: analysis,
-    size: 500000,
-    body: {
-      fields: [
-        "all_heatmap_order",
-        "cell_call",
-        "experimental_condition",
-        "state_mode"
-      ],
-      sort: [
-        {
-          all_heatmap_order: {
-            unmapped_type: "long"
-          }
-        }
-      ],
-      query: {
-        filtered: {
-          filter: {
-            bool: {
-              must: [
-                {
-                  terms: {
-                    caller: ["single_cell_qc"]
-                  }
-                },
-                {
-                  exists: {
-                    field: "all_heatmap_order"
-                  }
-                }
-              ]
-            }
-          },
-          query: {
-            bool: {
-              must: [
-                {
-                  terms: {
-                    all_heatmap_order: [...indices]
-                  }
-                }
-              ]
-            }
-          }
-        }
-      }
-    }
+    index: `${analysis.toLowerCase()}_qc`,
+    body: query
   });
-  return results;
+
+  return results.body.hits.hits.map(record => record["_source"]);
 }
 async function getMaxState(analysis) {
+  const client = createSuperUserClient();
+  const query = bodybuilder()
+    .size(0)
+    .agg("max", "state")
+    .build();
   const results = await client.search({
-    index: analysis,
-    size: 0,
-    body: {
-      aggs: {
-        integer_median: {
-          max: {
-            field: "state"
-          }
-        }
-      },
-      query: {
-        filtered: {
-          filter: {
-            bool: {
-              must: [
-                {
-                  type: {
-                    value: "segs"
-                  }
-                }
-              ]
-            }
-          }
-        }
-      }
-    }
+    index: `${analysis.toLowerCase()}_segs`,
+    body: query
   });
-  return results.aggregations.integer_median.value;
+  return results.body.aggregations.agg_max_state.value;
 }
 
 /*********
  * Bins
  **********/
-async function getBinsForID(index, id) {
+async function getBinsForID(analysis, id) {
+  const client = createSuperUserClient();
+  const query = bodybuilder()
+    .size(50000)
+    .filter("exists", "copy")
+    .filter("term", "cell_id", id)
+    .build();
+
   const results = await client.search({
-    index,
-    body: {
-      size: 50000,
-      _source: ["cell_id", "state", "start", "end", "chrom_number", "copy"],
-      query: {
-        bool: {
-          filter: [{ term: { cell_id: id } }]
-        }
-      },
-      filter: {
-        bool: {
-          should: [
-            {
-              bool: {
-                must: [
-                  {
-                    type: {
-                      value: "bins"
-                    }
-                  }
-                ]
-              }
-            }
-          ]
-        }
-      }
-    }
+    index: `${analysis.toLowerCase()}_bins`,
+    body: query
   });
-  return results.hits.hits.map(seg => seg["_source"]);
+  return results.body.hits.hits.map(record => record["_source"]);
 }
 /*********
  * Segs
  **********/
 async function getIDsForIndices(analysis, indices, quality) {
+  const client = createSuperUserClient();
+  const query = bodybuilder()
+    .size(50000)
+    .sort("order", "asc")
+    .filter("exists", "order")
+    .filter("range", "quality", { gte: parseFloat(quality) })
+    .filter("terms", "order", indices)
+    .build();
+
   const results = await client.search({
-    index: analysis.toLowerCase(),
-    body: {
-      size: 50000,
-      sort: [
-        {
-          all_heatmap_order: {
-            unmapped_type: "long"
-          }
-        }
-      ],
-      aggs: {
-        integer_median: {
-          max: {
-            field: "state"
-          }
-        }
-      },
-      query: {
-        filtered: {
-          filter: {
-            bool: {
-              must: [
-                {
-                  terms: {
-                    caller: ["single_cell_qc"]
-                  }
-                },
-                {
-                  exists: {
-                    field: "all_heatmap_order"
-                  }
-                },
-                {
-                  range: {
-                    quality: {
-                      gte: quality
-                    }
-                  }
-                }
-              ]
-            }
-          },
-          query: {
-            bool: {
-              must: [
-                {
-                  terms: {
-                    all_heatmap_order: [...indices]
-                  }
-                }
-              ]
-            }
-          }
-        }
-      }
-    }
+    index: `${analysis.toLowerCase()}_qc`,
+    body: query
   });
   return results;
 }
 
-async function getSegsForID(index, id) {
+async function getSegsForID(analysis, id) {
+  const client = createSuperUserClient();
+  const query = bodybuilder()
+    .size(50000)
+    .filter("term", "cell_id", id)
+    .build();
   const results = await client.search({
-    index,
-    body: {
-      size: 50000,
-      query: {
-        bool: {
-          filter: [{ term: { cell_id: id } }]
-        }
-      },
-      filter: {
-        bool: {
-          should: [
-            {
-              bool: {
-                must: [
-                  {
-                    type: {
-                      value: "segs"
-                    }
-                  }
-                ]
-              }
-            }
-          ]
-        }
-      }
-    }
+    index: `${analysis.toLowerCase()}_segs`,
+    body: query
   });
 
-  return results.hits.hits.map(seg => seg["_source"]);
+  return results.body.hits.hits.map(seg => seg["_source"]);
 }

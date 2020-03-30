@@ -1,0 +1,61 @@
+export const configConsts = [
+  { label: "Autocorrelation Hmmcopy", type: "autocorrelation_hmmcopy" },
+
+  { label: "Breakpoints", type: "breakpoints" },
+  { label: "Cell Call", type: "cell_call" },
+  { label: "Column", type: "column" },
+  { label: "Coverage Depth", type: "coverage_depth" },
+
+  { label: "Cv Hmmcopy", type: "cv_hmmcopy" },
+
+  { label: "Empty Bins Hmmcopy", type: "empty_bins_hmmcopy" },
+  { label: "Estimated Library Size", type: "estimated_library_size" },
+  //  { label: "Experimental Condition", type: "experimental_condition" },
+
+  { label: "Fastqscreen Grch37", type: "fastqscreen_grch37" },
+  { label: "Fastqscreen Grch37 Multihit", type: "fastqscreen_grch37_multihit" },
+  { label: "Fastqscreen Mm10", type: "fastqscreen_mm10" },
+  { label: "Fastqscreen Mm10 Multihit", type: "fastqscreen_mm10_multihit" },
+  { label: "Fastqscreen Nohit", type: "fastqscreen_nohit" },
+  { label: "Fastqscreen Salmon", type: "fastqscreen_salmon" },
+  { label: "Fastqscreen Salmon Multihit", type: "fastqscreen_salmon_multihit" },
+  { label: "Is S Phase Probability", type: "is_s_phase_prob" },
+  { label: "Log Likelihood", type: "log_likelihood" },
+  { label: "MBRSI Dispersion", type: "MBRSM_dispersion" },
+  {
+    label: "MBRSI Dispersion Non Integerness",
+    type: "MBRSI_dispersion_non_integerness"
+  },
+  { label: "MBRSI Non Integerness", type: "MBRSI_non_integerness" },
+  { label: "Mad Hmmcopy", type: "mad_hmmcopy" },
+  { label: "Mad Neutral State", type: "mad_neutral_state" },
+  { label: "Mean Copy", type: "mean_copy" },
+  { label: "Mean Hmmcopy Reads Per Bin", type: "mean_hmmcopy_reads_per_bin" },
+  { label: "Mean Insert Size", type: "mean_insert_size" },
+  { label: "Mean State Mads", type: "mean_state_mads" },
+  { label: "Mean State Vars", type: "mean_state_vars" },
+  { label: "Median Insert Size", type: "median_insert_size" },
+  { label: "Multiplier", type: "multiplier" },
+  { label: "Paired Duplicate Reads", type: "paired_duplicate_reads" },
+  { label: "Paired Mapped Reads", type: "paired_mapped_reads" },
+  { label: "Percent Duplicate Reads", type: "percent_duplicate_reads" },
+  { label: "Percent Unmapped Reads", type: "percent_unmapped_reads" },
+  { label: "Quality", type: "quality" },
+  { label: "Row", type: "row" },
+  { label: "Scaled Halfiness", type: "scaled_halfiness" },
+  {
+    label: "Standard Deviation Insert Size",
+    type: "standard_deviation_insert_size"
+  },
+  { label: "State Mode", type: "state_mode" },
+  { label: "Std Hmmcopy Reads Per Bin", type: "std_hmmcopy_reads_per_bin" },
+  { label: "Total Duplicate Reads", type: "total_duplicate_reads" },
+  { label: "Total Mapped Reads", type: "total_mapped_reads" },
+  { label: "Total Mapped Reads HMMCopy", type: "total_mapped_reads_hmmcopy" },
+  { label: "Unmapped Reads", type: "unmapped_reads" },
+  { label: "Total Properly Paired", type: "total_properly_paired" },
+  { label: "Total Reads", type: "total_reads" },
+  { label: "True Multiplier", type: "true_multiplier" },
+  { label: "Unpaired Duplicate Reads", type: "unpaired_duplicate_reads" },
+  { label: "Unpaired Mapped Reads", type: "unpaired_mapped_reads" }
+];
