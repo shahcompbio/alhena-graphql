@@ -146,7 +146,7 @@ export const resolvers = {
     end: root => root.agg_max_end.value
   },
   HeatmapOrder: {
-    order: root => root["order"]
+    order: root => root.order
   },
   SegRow: {
     id: root => `${root.cell_id}`,

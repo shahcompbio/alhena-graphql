@@ -12,6 +12,7 @@ import _ from "lodash";
 export const schema = gql`
   extend type Query {
     login(user: User!): LoginAcknowledgement
+    logout(username: String!): Acknowledgement
     getUsers(auth: ApiUser!): [AppUsers]
     createNewUser(user: NewUser!): CreationAcknowledgement
     verifyNewUserUri(key: String!): NewUserAcknowledgement
@@ -173,6 +174,15 @@ const getUsers = async auth => {
 const incompleteLogin = statusCode => {
   return { statusCode: statusCode, authKeyID: null, role: [] };
 };
+
+const logout = async username => {
+  const client = createSuperUserClient();
+  const oldKey = await client.security.invalidateApiKey({
+    body: { name: "login-" + username }
+  });
+  return oldKey && oldKey.statusCode === 200;
+};
+
 const login = async user => {
   const isPasswordCorrect = await authClient(user.uid, user.password).search({
     index: "analyses",
@@ -274,6 +284,9 @@ export const resolvers = {
     login: async (_, { user }) => {
       return await login(user);
     },
+    logout: async (_, { username }) => {
+      return await logout(username);
+    },
     verifyPasswordResetUri: async (_, { key }) => {
       const username = await verifyUriKey(key);
       return { username: username };
@@ -300,7 +313,7 @@ export const resolvers = {
     hashLink: root => root
   },
   Acknowledgement: {
-    confirmed: root => root === 200
+    confirmed: root => root
   },
   NewUserAcknowledgement: {
     isValid: root => (root.email || root.username ? true : false),
