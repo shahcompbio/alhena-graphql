@@ -157,7 +157,9 @@ export const resolvers = {
     },
     async getAllDashboards(_, { auth }) {
       const authKey = await getRedisApiKey(auth);
+
       const apiClient = client(authKey, auth.authKeyID);
+
       return await getAllDashboards(apiClient);
     },
     async getIndicesByDashboard(_, { dashboard }) {
