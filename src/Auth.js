@@ -4,6 +4,8 @@ const { gql, AuthenticationError } = require("apollo-server");
 import authClient from "./api/authClient";
 import client from "./api/client";
 
+import generateSecurePathHash from "./api/utils/crypto.js";
+
 import { superUserRoles } from "./api/utils/config.js";
 import { createSuperUserClient, getRedisApiKey } from "./utils.js";
 
@@ -27,6 +29,15 @@ export const schema = gql`
     deleteUser(username: String!): DeletionAcknowledgement
     allowResetPassword(username: String!): ConfirmationHashLink
     changePassword(username: String!, newPassword: String!): Acknowledgement
+    newUserLink(newUser: NewUserLink!): NewUserLinkResponse
+  }
+  input NewUserLink {
+    email: String!
+    name: String!
+    roles: String!
+  }
+  type NewUserLinkResponse {
+    newUserLink: String
   }
   input NewUser {
     username: String!
@@ -241,6 +252,31 @@ const login = async user => {
     return incompleteLogin(isPasswordCorrect.statusCode);
   }
 };
+const generateNewUserLink = async newUser => {
+  var homePath = "https://" + process.env.SERVER_NAME + "/NewAccount";
+  const redisSecretHash =
+    Math.random()
+      .toString(36)
+      .substring(2, 15) +
+    Math.random()
+      .toString(36)
+      .substring(2, 15);
+
+  const finalUrl = homePath + "/" + redisSecretHash;
+
+  await redis.set(redisSecretHash, newUser.email);
+  await redis.expireat(redisSecretHash, parseInt(+new Date() / 1000) + 86400);
+
+  //store user roles
+
+  await redis.set("roles_" + newUser.email, newUser.roles);
+  await redis.expireat(
+    "roles_" + newUser.email,
+    parseInt(+new Date() / 1000) + 86400
+  );
+
+  return finalUrl;
+};
 const updateRoles = async (newRoles, username, email, name) => {
   const client = createSuperUserClient();
 
@@ -287,6 +323,9 @@ export const resolvers = {
     logout: async (_, { username }) => {
       return await logout(username);
     },
+    newUserLink: async (_, { newUser }) => {
+      return generateNewUserLink(newUser);
+    },
     verifyPasswordResetUri: async (_, { key }) => {
       const username = await verifyUriKey(key);
       return { username: username };
@@ -314,6 +353,9 @@ export const resolvers = {
   },
   Acknowledgement: {
     confirmed: root => root
+  },
+  NewUserLinkResponse: {
+    newUserLink: root => root
   },
   NewUserAcknowledgement: {
     isValid: root => (root.email || root.username ? true : false),

@@ -8,7 +8,6 @@ import * as heatmap from "./Heatmap.js";
 import * as analyses from "./Analyses.js";
 import * as dashboards from "./Dashboards.js";
 import * as auth from "./Auth.js";
-import * as mailer from "./Mailer.js";
 import * as chipHeatmap from "./ChipHeatmap.js";
 import * as gcBias from "./GCBias.js";
 import * as scatterplot from "./Scatterplot.js";
@@ -27,7 +26,6 @@ const schema = makeExecutableSchema({
     analyses.schema,
     dashboards.schema,
     auth.schema,
-    mailer.schema,
     heatmap.schema,
     chipHeatmap.schema,
     gcBias.schema,
@@ -37,7 +35,6 @@ const schema = makeExecutableSchema({
     analyses.resolvers,
     dashboards.resolvers,
     auth.resolvers,
-    mailer.resolvers,
     heatmap.resolvers,
     chipHeatmap.resolvers,
     gcBias.resolvers,
