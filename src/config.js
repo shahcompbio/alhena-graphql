@@ -59,3 +59,33 @@ export const configConsts = [
   { label: "Unpaired Duplicate Reads", type: "unpaired_duplicate_reads" },
   { label: "Unpaired Mapped Reads", type: "unpaired_mapped_reads" }
 ];
+export const blackoutRegion = {
+  1: { start: 120500001, end: 146500000, width: 26000000 },
+  2: { start: 89500001, end: 95500000, width: 6000000 },
+  4: { start: 49000001, end: 53000000, width: 4000000 },
+  5: { start: 46000001, end: 49500000, width: 3500000 },
+  6: { start: 58000001, end: 62500000, width: 4500000 },
+  7: { start: 58000001, end: 62000000, width: 4000000 },
+  8: { start: 43500001, end: 47000000, width: 3500000 },
+  9: { start: 38500001, end: 71000000, width: 32500000 },
+  10: { start: 38500001, end: 43000000, width: 4500000 },
+  10: { start: 46000001, end: 49500000, width: 3500000 },
+  11: { start: 50500001, end: 55000000, width: 4500000 },
+  12: { start: 34500001, end: 38000000, width: 3500000 },
+  13: { start: 1, end: 19500000, width: 19500000 },
+  14: { start: 1, end: 19000000, width: 19000000 },
+  15: { start: 1, end: 24000000, width: 24000000 },
+  16: { start: 35000001, end: 46500000, width: 11500000 },
+  17: { start: 21500001, end: 25500000, width: 4000000 },
+  18: { start: 15000001, end: 18500000, width: 3500000 },
+  19: { start: 24500001, end: 28000000, width: 3500000 },
+  20: { start: 26000001, end: 30000000, width: 4000000 },
+  21: { start: 1, end: 14500000, width: 14500000 },
+  22: { start: 1, end: 17000000, width: 17000000 }
+};
+
+/*X: 58500001 62000000, width:3500000},
+X: 88500001 92500000 4000000},
+Y: 1 7000000 7000000
+Y: 10000001 14000000 4000000},
+Y: 23500001 59500000 36000000},*/
