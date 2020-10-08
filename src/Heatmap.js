@@ -15,6 +15,12 @@ export const schema = gql`
     analysisStats(analysis: String, indices: [Int!]!): AnalysisStats!
     heatmapOrder(analysis: String, quality: String!): [HeatmapOrder]
     categoriesStats(analysis: String): [CategoryStats]
+    heatmapOrderFromParameter(
+      analysis: String!
+      param: String!
+      value: String!
+      quality: String!
+    ): [HeatmapOrder]
   }
 
   type Chromosome {
@@ -115,6 +121,15 @@ export const resolvers = {
     async segs(_, { analysis, indices, quality }) {
       const results = await getIDsForIndices(analysis, indices, quality);
       return results.body.hits.hits.map(id => ({ ...id["_source"], analysis }));
+    },
+    async heatmapOrderFromParameter(_, { analysis, param, value, quality }) {
+      const results = await getHeatmapOrderByParam(
+        analysis,
+        param,
+        value,
+        quality
+      );
+      return results;
     }
   },
   Bin: {
@@ -166,7 +181,23 @@ export const resolvers = {
     state: root => root.state
   }
 };
+async function getHeatmapOrderByParam(analysis, param, value, quality) {
+  const client = createSuperUserClient();
+  const query = bodybuilder()
+    .size(50000)
+    .filter("term", param, value)
+    .sort("order", "asc")
+    .filter("exists", "order")
+    .filter("range", "quality", { gte: parseFloat(quality) })
+    .build();
 
+  const results = await client.search({
+    index: `${analysis.toLowerCase()}_qc`,
+    body: query
+  });
+
+  return results.body.hits.hits.map(record => record["_source"]);
+}
 async function getAllHeatmapOrder(analysis, quality) {
   const client = createSuperUserClient();
   const query = bodybuilder()
@@ -175,6 +206,7 @@ async function getAllHeatmapOrder(analysis, quality) {
     .filter("exists", "order")
     .filter("range", "quality", { gte: parseFloat(quality) })
     .build();
+
   const results = await client.search({
     index: `${analysis.toLowerCase()}_qc`,
     body: query
@@ -199,6 +231,7 @@ async function getAllCategoryStats(analysis) {
   });
   return results.body.aggregations;
 }
+
 async function getCellStats(analysis, indices) {
   const client = createSuperUserClient();
   const query = bodybuilder()

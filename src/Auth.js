@@ -188,9 +188,11 @@ const incompleteLogin = statusCode => {
 
 const logout = async username => {
   const client = createSuperUserClient();
+
   const oldKey = await client.security.invalidateApiKey({
     body: { name: "login-" + username }
   });
+
   return oldKey && oldKey.statusCode === 200;
 };
 
@@ -199,7 +201,6 @@ const login = async user => {
     index: "analyses",
     size: 1
   });
-
   if (isPasswordCorrect.statusCode === 200) {
     const client = createSuperUserClient();
     const result = await client.security.getApiKey({
@@ -214,6 +215,7 @@ const login = async user => {
           body: { name: "login-" + user.uid }
         });
       }
+
       if ((oldKey && oldKey.statusCode === 200) || oldKey === undefined) {
         const newKey = await client.security.createApiKey({
           body: {
@@ -253,7 +255,14 @@ const login = async user => {
   }
 };
 const generateNewUserLink = async newUser => {
-  var homePath = "https://" + process.env.SERVER_NAME + "/NewAccount";
+  var homePath = process.env.SERVER_NAME
+    ? "https://" +
+      process.env.SERVER_NAME +
+      "/" +
+      process.env.REACT_APP_BASENAME +
+      "/NewAccount"
+    : "http://localhost:3001/NewAccount";
+
   const redisSecretHash =
     Math.random()
       .toString(36)
