@@ -5,8 +5,6 @@ import _ from "lodash";
 import { createSuperUserClient } from "./utils.js";
 import { configConsts } from "./config.js";
 
-//import client from "./api/localClient.js";
-
 import bodybuilder from "bodybuilder";
 export const schema = gql`
   extend type Query {
@@ -170,14 +168,18 @@ const getHistogram = async (
   const client = createSuperUserClient();
   const x = results.aggregations["xInterval"];
   const y = results.aggregations["yInterval"];
-  const xInterval =
+
+  var xInterval =
     x.max - x.min < 1 || x.max - x.min === 1
       ? (x.max - x.min) / 10
       : Math.round((x.max - x.min) / 25);
-  const yInterval =
+  xInterval = xInterval === 0 ? 1 : xInterval;
+
+  var yInterval =
     y.max - y.min < 1 || y.max - y.min === 1
       ? (y.max - y.min) / 10
       : Math.round((y.max - y.min) / 25);
+  yInterval = yInterval === 0 ? 1 : yInterval;
 
   const histogramQuery = bodybuilder()
     .size(0)

@@ -124,7 +124,7 @@ const getMinMax = async (axisName, quality, client, analysis) => {
     histogram["min"] = quality;
   } else {
     const query = bodybuilder()
-      //.aggregation("stats", axisName)
+      .filter("range", "quality", { gte: parseFloat(quality) })
       .aggregation("max", axisName)
       .aggregation("min", axisName)
       .build();
