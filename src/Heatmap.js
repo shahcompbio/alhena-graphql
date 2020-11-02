@@ -3,7 +3,6 @@ const { gql } = require("apollo-server");
 import _ from "lodash";
 
 import { createSuperUserClient } from "./utils.js";
-//import client from "./api/localClient.js";
 
 import bodybuilder from "bodybuilder";
 
@@ -17,8 +16,7 @@ export const schema = gql`
     categoriesStats(analysis: String): [CategoryStats]
     heatmapOrderFromParameter(
       analysis: String!
-      param: String!
-      value: String!
+      params: [InputParams]
       quality: String!
     ): [HeatmapOrder]
   }
@@ -35,6 +33,7 @@ export const schema = gql`
   type CategoryStats {
     category: String!
     types: [String]!
+    cellIDs: [Int]!
   }
   type CellStats {
     id: String!
@@ -57,6 +56,10 @@ export const schema = gql`
   }
   type HeatmapOrder {
     order: Int!
+  }
+  input InputParams {
+    param: String!
+    value: String!
   }
   type SegRow {
     id: String!
@@ -122,13 +125,8 @@ export const resolvers = {
       const results = await getIDsForIndices(analysis, indices, quality);
       return results.body.hits.hits.map(id => ({ ...id["_source"], analysis }));
     },
-    async heatmapOrderFromParameter(_, { analysis, param, value, quality }) {
-      const results = await getHeatmapOrderByParam(
-        analysis,
-        param,
-        value,
-        quality
-      );
+    async heatmapOrderFromParameter(_, { analysis, params, quality }) {
+      const results = await getHeatmapOrderByParam(analysis, params, quality);
       return results;
     }
   },
@@ -153,7 +151,8 @@ export const resolvers = {
   },
   CategoryStats: {
     category: root => root.category,
-    types: root => root.types.map(type => type.key)
+    types: root => root.types.map(type => type.key),
+    cellIDs: root => root
   },
   Chromosome: {
     id: root => root.key,
@@ -181,11 +180,16 @@ export const resolvers = {
     state: root => root.state
   }
 };
-async function getHeatmapOrderByParam(analysis, param, value, quality) {
+async function getHeatmapOrderByParam(analysis, params, quality) {
   const client = createSuperUserClient();
-  const query = bodybuilder()
+  var query = bodybuilder();
+
+  const filters = params.map(param =>
+    query.addFilter("term", param["param"], param["value"])
+  );
+
+  query
     .size(50000)
-    .filter("term", param, value)
     .sort("order", "asc")
     .filter("exists", "order")
     .filter("range", "quality", { gte: parseFloat(quality) })
@@ -225,6 +229,7 @@ async function getAllCategoryStats(analysis) {
     .agg("terms", "cell_call", { size: 1000, order: { _term: "asc" } })
     .agg("terms", "state_mode", { size: 1000, order: { _term: "asc" } })
     .build();
+
   const results = await client.search({
     index: `${analysis.toLowerCase()}_qc`,
     body: query

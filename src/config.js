@@ -155,5 +155,10 @@ export const configConsts = [
     label: "Unpaired Mapped Reads",
     type: "unpaired_mapped_reads",
     class: "numerical"
+  },
+  {
+    label: "Is Contaminated",
+    type: "is_contaminated",
+    class: "boolean"
   }
 ];
