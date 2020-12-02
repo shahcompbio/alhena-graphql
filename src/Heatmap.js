@@ -1,3 +1,4 @@
+import redis from "./api/redisClient.js";
 const { gql } = require("apollo-server");
 
 import _ from "lodash";
@@ -5,7 +6,9 @@ import _ from "lodash";
 import { createSuperUserClient } from "./utils.js";
 
 import bodybuilder from "bodybuilder";
+import { configConsts } from "./config.js";
 
+const round = num => Math.round(num * 100) / 100;
 export const schema = gql`
   extend type Query {
     chromosomes(analysis: String!): [Chromosome]
@@ -13,14 +16,26 @@ export const schema = gql`
     bins(analysis: String!, id: String!): [Bin]
     analysisStats(analysis: String, indices: [Int!]!): AnalysisStats!
     heatmapOrder(analysis: String, quality: String!): [HeatmapOrder]
-    categoriesStats(analysis: String): [CategoryStats]
+    categoriesStats(analysis: String, dataFilters: [String]): [CategoryStats]
+    numericalDataFilters(
+      analysis: String
+      quality: String!
+      params: [InputParams]
+    ): DataFilterStats
     heatmapOrderFromParameter(
       analysis: String!
       params: [InputParams]
       quality: String!
     ): [HeatmapOrder]
   }
-
+  type NumericalDataFilters {
+    name: String
+    label: String
+    max: Float
+    min: Float
+    localMax: Float
+    localMin: Float
+  }
   type Chromosome {
     id: String!
     start: Int!
@@ -29,6 +44,10 @@ export const schema = gql`
   type AnalysisStats {
     maxState: Int!
     cellStats: [CellStats]
+  }
+  type DataFilterStats {
+    numericalDataFilters: [NumericalDataFilters]
+    heatmapOrderFromDataFilters: [HeatmapOrder]
   }
   type CategoryStats {
     category: String!
@@ -57,9 +76,11 @@ export const schema = gql`
   type HeatmapOrder {
     order: Int!
   }
+
   input InputParams {
     param: String!
     value: String!
+    operator: String
   }
   type SegRow {
     id: String!
@@ -96,9 +117,13 @@ export const resolvers = {
 
       return results.body.aggregations.agg_terms_chrom_number.buckets;
     },
+    async numericalDataFilters(_, { analysis, quality, params }) {
+      return await getDataFilters(analysis, quality, params);
+    },
     async bins(_, { analysis, id }) {
       return await getBinsForID(analysis, id);
     },
+
     async categoriesStats(_, { analysis }) {
       const queryResults = await getAllCategoryStats(analysis);
       return ["experimental_condition", "cell_call", "state_mode"].map(
@@ -129,6 +154,22 @@ export const resolvers = {
       const results = await getHeatmapOrderByParam(analysis, params, quality);
       return results;
     }
+  },
+  DataFilterStats: {
+    numericalDataFilters: root => root["numericalDataFilters"],
+    heatmapOrderFromDataFilters: root => root["order"]
+  },
+  NumericalDataFilters: {
+    name: root =>
+      root.name
+        .split("_")
+        .splice(2, root.name.length - 1)
+        .join("_"),
+    label: root => root.label,
+    max: root => round(root.stats.max),
+    min: root => round(root.stats.min),
+    localMax: root => round(root.localStats.max),
+    localMin: root => round(root.localStats.min)
   },
   Bin: {
     id: root => root.cell_id + root.start + root.chrom_number,
@@ -180,13 +221,89 @@ export const resolvers = {
     state: root => root.state
   }
 };
+async function getDataFilters(analysis, quality, params) {
+  const dataFilterLabelObj = configConsts.reduce((final, curr) => {
+    final[curr.type] = curr["label"];
+    return final;
+  }, {});
+
+  const client = createSuperUserClient();
+
+  var query = bodybuilder()
+    .size(0)
+    .agg("stats", "mad_neutral_state")
+    .agg("stats", "log_likelihood")
+    .agg("stats", "total_mapped_reads")
+    .agg("stats", "coverage_breadth")
+    .build();
+
+  const results = await client.search({
+    index: `${analysis.toLowerCase()}_qc`,
+    body: query
+  });
+
+  var localMaxMinQuery = bodybuilder();
+  const filters = params.map(param => {
+    if (param["operator"]) {
+      localMaxMinQuery.addFilter("range", param["param"], {
+        [param["operator"]]: parseFloat(param["value"])
+      });
+    } else if (
+      param["param"] === "experimental_condition" &&
+      param["value"].indexOf(",") !== -1
+    ) {
+      localMaxMinQuery.addFilter("terms", param["param"], [
+        ...param["value"].split(",")
+      ]);
+    } else {
+      localMaxMinQuery.addFilter("term", param["param"], param["value"]);
+    }
+  });
+
+  localMaxMinQuery
+    .size(50000)
+    .sort("order", "asc")
+    .filter("exists", "order")
+    .filter("range", "quality", { gte: parseFloat(quality) })
+    .agg("stats", "mad_neutral_state")
+    .agg("stats", "log_likelihood")
+    .agg("stats", "total_mapped_reads")
+    .agg("stats", "coverage_breadth")
+    .build();
+  const localMaxResults = await client.search({
+    index: `${analysis.toLowerCase()}_qc`,
+    body: localMaxMinQuery.build()
+  });
+  return {
+    order: localMaxResults.body.hits.hits.map(record => record["_source"]),
+    numericalDataFilters: Object.keys(results.body.aggregations).map(agg => ({
+      label:
+        dataFilterLabelObj[
+          agg
+            .split("_")
+            .splice(2, agg.length - 1)
+            .join("_")
+        ],
+      name: agg,
+      localStats: localMaxResults.body.aggregations[agg],
+      stats: results.body.aggregations[agg]
+    }))
+  };
+}
 async function getHeatmapOrderByParam(analysis, params, quality) {
   const client = createSuperUserClient();
   var query = bodybuilder();
 
-  const filters = params.map(param =>
-    query.addFilter("term", param["param"], param["value"])
-  );
+  const filters = params.map(param => {
+    if (
+      param["param"] === "experimental_condition" &&
+      param["value"].indexOf(",") !== -1
+    ) {
+      query.addFilter("terms", param["param"], [param["value"].split(",")]);
+    } else {
+      query.addFilter("term", param["param"], param["value"]);
+    }
+  });
 
   query
     .size(50000)
