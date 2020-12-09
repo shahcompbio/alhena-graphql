@@ -6,6 +6,11 @@ export const configConsts = [
   },
 
   { label: "Breakpoints", type: "breakpoints", class: "numerical" },
+  {
+    label: "Breadth Coverage Depth",
+    type: "coverage_breadth",
+    class: "numerical"
+  },
   { label: "Cell Call", type: "cell_call", class: "categorical" },
   { label: "Column", type: "column", class: "categorical" },
   { label: "Coverage Depth", type: "coverage_depth", class: "numerical" },
@@ -155,5 +160,10 @@ export const configConsts = [
     label: "Unpaired Mapped Reads",
     type: "unpaired_mapped_reads",
     class: "numerical"
+  },
+  {
+    label: "Is Contaminated",
+    type: "is_contaminated",
+    class: "boolean"
   }
 ];
