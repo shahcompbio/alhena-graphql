@@ -6,21 +6,20 @@ import client from "./api/client";
 
 import bodybuilder from "bodybuilder";
 import _ from "lodash";
-
+import { fitness } from "./fitness.js";
 import { createSuperUserClient } from "./utils.js";
 import { getApiId, getIndicesByDashboard } from "./Dashboards";
 
-const FIELD_HIERARCHY = ["project", "sample_id", "library_id", "jira_id"];
+const FIELD_HIERARCHY = ["project", "pseudobulk_group", "alhena_id"];
 const FIELD_NAMES = {
   project: "Project",
-  sample_id: "Sample ID",
-  library_id: "Library",
-  jira_id: "Analysis ID"
+  pseudobulk_group: "Pseudobulk Group",
+  alhena_id: "Analysis"
 };
 
 export const schema = gql`
   extend type Query {
-    analyses(filters: [Term]!, auth: ApiUser!, dashboardName: String!): Analyses
+    analyses(filters: [Term]!, auth: ApiUser, dashboardName: String!): Analyses
   }
   input Term {
     label: String!
@@ -81,7 +80,7 @@ const filterChildren = (root, hierarchyLevel) => {
 };
 
 const getAnalyses = async (filters, auth, dashboardName) => {
-  const baseQuery = bodybuilder().size(10000);
+  /*const baseQuery = bodybuilder().size(10000);
 
   const query =
     filters === []
@@ -105,23 +104,35 @@ const getAnalyses = async (filters, auth, dashboardName) => {
   );
   if (data["body"].hasOwnProperty("error")) {
     return null;
-  } else {
-    const allowedIndices = await getIndicesByDashboard(dashboardName);
-    const allowedIndicesObj = allowedIndices.reduce((final, index) => {
-      final[index] = true;
-      return final;
-    }, {});
+  } else {*/
+  //const allowedIndices = await getIndicesByDashboard(dashboardName);
+  const allowedIndices = ["SC-124"];
+  const allowedIndicesObj = allowedIndices.reduce((final, index) => {
+    final[index] = true;
+    return final;
+  }, {});
 
-    const allowedAnalyses = data["body"]["hits"]["hits"]
+  const allowedAnalyses = fitness
+    .filter(analysis =>
+      filters.length
+        ? analysis[filters[0]["label"]] === filters[0]["value"]
+        : true
+    )
+    .map(analysis => {
+      analysis["project"] = "Fitness";
+      return analysis;
+    });
+
+  /*  const allowedAnalyses = data["body"]["hits"]["hits"]
       .map(hit => hit["_source"])
       .filter(analysis => allowedIndicesObj.hasOwnProperty(analysis.jira_id))
       .map(analysis => {
         analysis["project"] = dashboardName;
         return analysis;
-      });
+      });*/
 
-    return [...allowedAnalyses];
-  }
+  return [...allowedAnalyses];
+  //}
 };
 
 const getUniqueValuesInKey = (list, key) =>

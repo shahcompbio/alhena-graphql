@@ -60,6 +60,7 @@ export const schema = gql`
     experimental_condition: String
     heatmap_order: Int
     cell_call: String
+    clone_id: String
   }
   type ExperimentalConditions {
     type: String
@@ -126,12 +127,15 @@ export const resolvers = {
 
     async categoriesStats(_, { analysis }) {
       const queryResults = await getAllCategoryStats(analysis);
-      return ["experimental_condition", "cell_call", "state_mode"].map(
-        category => ({
-          category,
-          types: queryResults[`agg_terms_${category}`].buckets
-        })
-      );
+      return [
+        "experimental_condition",
+        //  "cell_call",
+        "state_mode",
+        "clone_id"
+      ].map(category => ({
+        category,
+        types: queryResults[`agg_terms_${category}`].buckets
+      }));
     },
     async analysisStats(_, { analysis, indices }) {
       const cellStats = await getCellStats(analysis, indices);
@@ -188,7 +192,8 @@ export const resolvers = {
     state_mode: root => root.state_mode,
     experimental_condition: root => root.experimental_condition,
     cell_call: root => root.cell_call,
-    heatmap_order: root => root.order
+    heatmap_order: root => root.order,
+    clone_id: root => root.clone_id
   },
   CategoryStats: {
     category: root => root.category,
@@ -343,8 +348,9 @@ async function getAllCategoryStats(analysis) {
       size: 1000,
       order: { _term: "asc" }
     })
-    .agg("terms", "cell_call", { size: 1000, order: { _term: "asc" } })
+    //.agg("terms", "cell_call", { size: 1000, order: { _term: "asc" } })
     .agg("terms", "state_mode", { size: 1000, order: { _term: "asc" } })
+    .agg("terms", "clone_id", { size: 1000, order: { _term: "asc" } })
     .build();
 
   const results = await client.search({
