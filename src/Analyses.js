@@ -32,6 +32,13 @@ export const schema = gql`
     analysesStats: [Stat!]!
     analysesList: [AnalysisGroup!]
     analysesTree: AnalysesTree
+    analysesRows: [AnalysesRow]
+  }
+  type AnalysesRow {
+    project: String!
+    sample_id: String!
+    library_id: String!
+    jira_id: String!
   }
   type AnalysesTree {
     source: String
@@ -138,7 +145,8 @@ export const resolvers = {
     error: root => root.error,
     analysesStats: root => root.stats,
     analysesList: root => root.list,
-    analysesTree: root => root.tree
+    analysesTree: root => root.tree,
+    analysesRows: root => root.tree
   },
 
   ParentType: {
@@ -148,6 +156,12 @@ export const resolvers = {
   ChildType: {
     source: root => root.source,
     value: () => 1
+  },
+  AnalysesRow: {
+    project: root => root.project,
+    sample_id: root => root.sample_id,
+    library_id: root => root.library_id,
+    jira_id: root => root.jira_id
   },
   AnalysesTree: {
     source: () => null,
