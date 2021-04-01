@@ -12,6 +12,7 @@ import * as chipHeatmap from "./ChipHeatmap.js";
 import * as gcBias from "./GCBias.js";
 import * as scatterplot from "./Scatterplot.js";
 import * as violin from "./Violin.js";
+import * as cache from "./Cache.js";
 
 import { makeExecutableSchema } from "graphql-tools";
 import { merge } from "lodash";
@@ -31,7 +32,8 @@ const schema = makeExecutableSchema({
     chipHeatmap.schema,
     gcBias.schema,
     scatterplot.schema,
-    violin.schema
+    violin.schema,
+    cache.schema
   ],
   resolvers: merge(
     analyses.resolvers,
@@ -41,7 +43,8 @@ const schema = makeExecutableSchema({
     chipHeatmap.resolvers,
     gcBias.resolvers,
     scatterplot.resolvers,
-    violin.resolvers
+    violin.resolvers,
+    cache.resolvers
   ),
   inheritResolversFromInterfaces: true
 });

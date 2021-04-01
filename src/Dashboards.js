@@ -6,12 +6,13 @@ import client from "./api/client";
 import authClient from "./api/authClient";
 
 import { createSuperUserClient, getRedisApiKey } from "./utils.js";
+import cacheConfig from "./api/cacheConfigs.js";
 
 import _ from "lodash";
 
 export const schema = gql`
   extend type Query {
-    getDashboardsByUser(auth: ApiUser!): [Dashboard]
+    getDashboardsByUser(auth: ApiUser!): UserDashboard
     getAllDashboards(auth: ApiUser!): [Dashboard]
     getAllIndices: [Index!]
     getIndicesByDashboard(dashboard: String!): [Index]
@@ -35,6 +36,10 @@ export const schema = gql`
   type Dashboard {
     name: String!
     count: Int
+  }
+  type UserDashboard {
+    dashboards: [Dashboard]!
+    defaultDashboard: String
   }
 `;
 var collator = new Intl.Collator(undefined, {
@@ -128,7 +133,14 @@ const getApiId = async uid => {
     )[0].id;
   }
 };
+
+const getKey = async key => await redis.get(key);
+
 export const resolvers = {
+  UserDashboard: {
+    dashboards: root => root.dashboards,
+    defaultDashboard: root => root.defaultDashboard
+  },
   Dashboard: {
     name: root => root.name,
     count: root => root.count
@@ -167,19 +179,35 @@ export const resolvers = {
     },
     async getDashboardsByUser(_, { auth }) {
       const authorizedDashboards = await getUserRoles(auth.uid);
+      const lastSelectedDashboard = await getKey(
+        cacheConfig["lastSelectedProject"] + auth.uid
+      );
+
       if (authorizedDashboards[0] === "superuser") {
         const client = createSuperUserClient();
         const allDashboards = await getAllDashboards(client);
-        return allDashboards.map(dashboard => ({ name: dashboard["name"] }));
+        return {
+          defaultDashboard: lastSelectedDashboard
+            ? lastSelectedDashboard
+            : allDashboards[0]["name"],
+          dashboards: allDashboards.map(dashboard => ({
+            name: dashboard["name"]
+          }))
+        };
       }
-      return authorizedDashboards.reduce((final, dashboardName) => {
-        return [
-          ...final,
-          {
-            name: dashboardName.split("_")[0]
-          }
-        ];
-      }, []);
+      return {
+        defaultDashboard: lastSelectedDashboard
+          ? lastSelectedDashboard
+          : authorizedDashboards[0].split("_")[0],
+        dashboards: authorizedDashboards.reduce((final, dashboardName) => {
+          return [
+            ...final,
+            {
+              name: dashboardName.split("_")[0]
+            }
+          ];
+        }, [])
+      };
     }
   }
 };

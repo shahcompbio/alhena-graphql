@@ -201,6 +201,7 @@ const login = async user => {
     index: "analyses",
     size: 1
   });
+
   if (isPasswordCorrect.statusCode === 200) {
     const client = createSuperUserClient();
     const result = await client.security.getApiKey({
