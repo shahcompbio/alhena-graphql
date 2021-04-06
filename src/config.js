@@ -1,91 +1,169 @@
 export const configConsts = [
-  { label: "Autocorrelation Hmmcopy", type: "autocorrelation_hmmcopy" },
+  {
+    label: "Autocorrelation Hmmcopy",
+    type: "autocorrelation_hmmcopy",
+    class: "numerical"
+  },
 
-  { label: "Breakpoints", type: "breakpoints" },
-  { label: "Cell Call", type: "cell_call" },
-  { label: "Column", type: "column" },
-  { label: "Coverage Depth", type: "coverage_depth" },
+  { label: "Breakpoints", type: "breakpoints", class: "numerical" },
+  {
+    label: "Breadth Coverage Depth",
+    type: "coverage_breadth",
+    class: "numerical"
+  },
+  { label: "Cell Call", type: "cell_call", class: "categorical" },
+  { label: "Column", type: "column", class: "categorical" },
+  { label: "Coverage Depth", type: "coverage_depth", class: "numerical" },
 
-  { label: "Cv Hmmcopy", type: "cv_hmmcopy" },
+  { label: "Cv Hmmcopy", type: "cv_hmmcopy", class: "numerical" },
 
-  { label: "Empty Bins Hmmcopy", type: "empty_bins_hmmcopy" },
-  { label: "Estimated Library Size", type: "estimated_library_size" },
-  //  { label: "Experimental Condition", type: "experimental_condition" },
+  {
+    label: "Empty Bins Hmmcopy",
+    type: "empty_bins_hmmcopy",
+    class: "numerical"
+  },
+  {
+    label: "Estimated Library Size",
+    type: "estimated_library_size",
+    class: "numerical"
+  },
+  {
+    label: "Experimental Condition",
+    type: "experimental_condition",
+    class: "categorical"
+  },
 
-  { label: "Fastqscreen Grch37", type: "fastqscreen_grch37" },
-  { label: "Fastqscreen Grch37 Multihit", type: "fastqscreen_grch37_multihit" },
-  { label: "Fastqscreen Mm10", type: "fastqscreen_mm10" },
-  { label: "Fastqscreen Mm10 Multihit", type: "fastqscreen_mm10_multihit" },
-  { label: "Fastqscreen Nohit", type: "fastqscreen_nohit" },
-  { label: "Fastqscreen Salmon", type: "fastqscreen_salmon" },
-  { label: "Fastqscreen Salmon Multihit", type: "fastqscreen_salmon_multihit" },
-  { label: "Is S Phase Probability", type: "is_s_phase_prob" },
-  { label: "Log Likelihood", type: "log_likelihood" },
-  { label: "MBRSI Dispersion", type: "MBRSM_dispersion" },
+  {
+    label: "Fastqscreen Grch37",
+    type: "fastqscreen_grch37",
+    class: "numerical"
+  },
+  {
+    label: "Fastqscreen Grch37 Multihit",
+    type: "fastqscreen_grch37_multihit",
+    class: "numerical"
+  },
+  { label: "Fastqscreen Mm10", type: "fastqscreen_mm10", class: "numerical" },
+  {
+    label: "Fastqscreen Mm10 Multihit",
+    type: "fastqscreen_mm10_multihit",
+    class: "numerical"
+  },
+  { label: "Fastqscreen Nohit", type: "fastqscreen_nohit", class: "numerical" },
+  {
+    label: "Fastqscreen Salmon",
+    type: "fastqscreen_salmon",
+    class: "numerical"
+  },
+  {
+    label: "Fastqscreen Salmon Multihit",
+    type: "fastqscreen_salmon_multihit",
+    class: "numerical"
+  },
+  {
+    label: "Is S Phase Probability",
+    type: "is_s_phase_prob",
+    class: "numerical"
+  },
+  { label: "Log Likelihood", type: "log_likelihood", class: "numerical" },
+  { label: "MBRSI Dispersion", type: "MBRSM_dispersion", class: "numerical" },
   {
     label: "MBRSI Dispersion Non Integerness",
-    type: "MBRSI_dispersion_non_integerness"
+    type: "MBRSI_dispersion_non_integerness",
+    class: "numerical"
   },
-  { label: "MBRSI Non Integerness", type: "MBRSI_non_integerness" },
-  { label: "Mad Hmmcopy", type: "mad_hmmcopy" },
-  { label: "Mad Neutral State", type: "mad_neutral_state" },
-  { label: "Mean Copy", type: "mean_copy" },
-  { label: "Mean Hmmcopy Reads Per Bin", type: "mean_hmmcopy_reads_per_bin" },
-  { label: "Mean Insert Size", type: "mean_insert_size" },
-  { label: "Mean State Mads", type: "mean_state_mads" },
-  { label: "Mean State Vars", type: "mean_state_vars" },
-  { label: "Median Insert Size", type: "median_insert_size" },
-  { label: "Multiplier", type: "multiplier" },
-  { label: "Paired Duplicate Reads", type: "paired_duplicate_reads" },
-  { label: "Paired Mapped Reads", type: "paired_mapped_reads" },
-  { label: "Percent Duplicate Reads", type: "percent_duplicate_reads" },
-  { label: "Percent Unmapped Reads", type: "percent_unmapped_reads" },
-  { label: "Quality", type: "quality" },
+  {
+    label: "MBRSI Non Integerness",
+    type: "MBRSI_non_integerness",
+    class: "numerical"
+  },
+  { label: "Mad Hmmcopy", type: "mad_hmmcopy", class: "numerical" },
+  { label: "Mad Neutral State", type: "mad_neutral_state", class: "numerical" },
+  { label: "Mean Copy", type: "mean_copy", class: "numerical" },
+  {
+    label: "Mean Hmmcopy Reads Per Bin",
+    type: "mean_hmmcopy_reads_per_bin",
+    class: "numerical"
+  },
+  { label: "Mean Insert Size", type: "mean_insert_size", class: "numerical" },
+  { label: "Mean State Mads", type: "mean_state_mads", class: "numerical" },
+  { label: "Mean State Vars", type: "mean_state_vars", class: "numerical" },
+  {
+    label: "Median Insert Size",
+    type: "median_insert_size",
+    class: "numerical"
+  },
+  { label: "Multiplier", type: "multiplier", class: "numerical" },
+  {
+    label: "Paired Duplicate Reads",
+    type: "paired_duplicate_reads",
+    class: "numerical"
+  },
+  {
+    label: "Paired Mapped Reads",
+    type: "paired_mapped_reads",
+    class: "numerical"
+  },
+  {
+    label: "Percent Duplicate Reads",
+    type: "percent_duplicate_reads",
+    class: "numerical"
+  },
+  {
+    label: "Percent Unmapped Reads",
+    type: "percent_unmapped_reads",
+    class: "numerical"
+  },
+  { label: "Quality", type: "quality", class: "numerical" },
   { label: "Row", type: "row" },
-  { label: "Scaled Halfiness", type: "scaled_halfiness" },
+  { label: "Scaled Halfiness", type: "scaled_halfiness", class: "numerical" },
   {
     label: "Standard Deviation Insert Size",
-    type: "standard_deviation_insert_size"
+    type: "standard_deviation_insert_size",
+    class: "numerical"
   },
-  { label: "State Mode", type: "state_mode" },
-  { label: "Std Hmmcopy Reads Per Bin", type: "std_hmmcopy_reads_per_bin" },
-  { label: "Total Duplicate Reads", type: "total_duplicate_reads" },
-  { label: "Total Mapped Reads", type: "total_mapped_reads" },
-  { label: "Total Mapped Reads HMMCopy", type: "total_mapped_reads_hmmcopy" },
-  { label: "Unmapped Reads", type: "unmapped_reads" },
-  { label: "Total Properly Paired", type: "total_properly_paired" },
-  { label: "Total Reads", type: "total_reads" },
-  { label: "True Multiplier", type: "true_multiplier" },
-  { label: "Unpaired Duplicate Reads", type: "unpaired_duplicate_reads" },
-  { label: "Unpaired Mapped Reads", type: "unpaired_mapped_reads" }
+  { label: "State Mode", type: "state_mode", class: "categorical" },
+  {
+    label: "Std Hmmcopy Reads Per Bin",
+    type: "std_hmmcopy_reads_per_bin",
+    class: "numerical"
+  },
+  {
+    label: "Total Duplicate Reads",
+    type: "total_duplicate_reads",
+    class: "numerical"
+  },
+  {
+    label: "Total Mapped Reads",
+    type: "total_mapped_reads",
+    class: "numerical"
+  },
+  {
+    label: "Total Mapped Reads HMMCopy",
+    type: "total_mapped_reads_hmmcopy",
+    class: "numerical"
+  },
+  { label: "Unmapped Reads", type: "unmapped_reads", class: "numerical" },
+  {
+    label: "Total Properly Paired",
+    type: "total_properly_paired",
+    class: "numerical"
+  },
+  { label: "Total Reads", type: "total_reads", class: "numerical" },
+  { label: "True Multiplier", type: "true_multiplier", class: "numerical" },
+  {
+    label: "Unpaired Duplicate Reads",
+    type: "unpaired_duplicate_reads",
+    class: "numerical"
+  },
+  {
+    label: "Unpaired Mapped Reads",
+    type: "unpaired_mapped_reads",
+    class: "numerical"
+  },
+  {
+    label: "Is Contaminated",
+    type: "is_contaminated",
+    class: "boolean"
+  }
 ];
-export const blackoutRegion = {
-  1: { start: 120500001, end: 146500000, width: 26000000 },
-  2: { start: 89500001, end: 95500000, width: 6000000 },
-  4: { start: 49000001, end: 53000000, width: 4000000 },
-  5: { start: 46000001, end: 49500000, width: 3500000 },
-  6: { start: 58000001, end: 62500000, width: 4500000 },
-  7: { start: 58000001, end: 62000000, width: 4000000 },
-  8: { start: 43500001, end: 47000000, width: 3500000 },
-  9: { start: 38500001, end: 71000000, width: 32500000 },
-  10: { start: 38500001, end: 43000000, width: 4500000 },
-  10: { start: 46000001, end: 49500000, width: 3500000 },
-  11: { start: 50500001, end: 55000000, width: 4500000 },
-  12: { start: 34500001, end: 38000000, width: 3500000 },
-  13: { start: 1, end: 19500000, width: 19500000 },
-  14: { start: 1, end: 19000000, width: 19000000 },
-  15: { start: 1, end: 24000000, width: 24000000 },
-  16: { start: 35000001, end: 46500000, width: 11500000 },
-  17: { start: 21500001, end: 25500000, width: 4000000 },
-  18: { start: 15000001, end: 18500000, width: 3500000 },
-  19: { start: 24500001, end: 28000000, width: 3500000 },
-  20: { start: 26000001, end: 30000000, width: 4000000 },
-  21: { start: 1, end: 14500000, width: 14500000 },
-  22: { start: 1, end: 17000000, width: 17000000 }
-};
-
-/*X: 58500001 62000000, width:3500000},
-X: 88500001 92500000 4000000},
-Y: 1 7000000 7000000
-Y: 10000001 14000000 4000000},
-Y: 23500001 59500000 36000000},*/

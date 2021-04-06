@@ -167,6 +167,11 @@ export const resolvers = {
     },
     async getDashboardsByUser(_, { auth }) {
       const authorizedDashboards = await getUserRoles(auth.uid);
+      if (authorizedDashboards[0] === "superuser") {
+        const client = createSuperUserClient();
+        const allDashboards = await getAllDashboards(client);
+        return allDashboards.map(dashboard => ({ name: dashboard["name"] }));
+      }
       return authorizedDashboards.reduce((final, dashboardName) => {
         return [
           ...final,

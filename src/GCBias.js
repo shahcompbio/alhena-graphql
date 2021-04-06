@@ -3,19 +3,24 @@ const { gql } = require("apollo-server");
 import _ from "lodash";
 
 import { createSuperUserClient } from "./utils.js";
-//import client from "./api/localClient.js";
 
 import bodybuilder from "bodybuilder";
 export const schema = gql`
   extend type Query {
-    gcBias(analysis: String, quality: String!, selectionOrder: [Int!]): GCBias
+    gcBias(
+      analysis: String!
+      quality: String!
+      selectedCells: [Int!]
+      isGrouped: Boolean!
+    ): [GCBias]
   }
   type GCBias {
     stats: GCStats
+    cellOrder: [Int]
     gcCells: [GCCell]
+    experimentalCondition: String
   }
   type GCCell {
-    experimentalCondition: String
     gcPercent: Float
     highCi: Float
     lowCi: Float
@@ -31,16 +36,17 @@ export const schema = gql`
 
 export const resolvers = {
   Query: {
-    async gcBias(_, { analysis, quality, selectionOrder }) {
-      return await getGcBias(analysis, quality, selectionOrder);
+    async gcBias(_, { analysis, quality, selectedCells, isGrouped }) {
+      return await getGcBias(analysis, quality, selectedCells, isGrouped);
     }
   },
   GCBias: {
     stats: root => root,
-    gcCells: root => root["agg_terms_gc_percent"]["buckets"]
+    cellOrder: root => root["cells"],
+    gcCells: root => root["results"]["agg_terms_gc_percent"]["buckets"],
+    experimentalCondition: root => root["category"]
   },
   GCCell: {
-    experimentalCondition: root => "",
     gcPercent: root => root["key"],
     highCi: root => {
       const { avg, count, std_deviation } = root["agg_extended_stats_value"];
@@ -55,52 +61,106 @@ export const resolvers = {
 
   GCStats: {
     yMax: root => {
-      const viewingMax = root["agg_percentiles_value"]["values"]["75.0"];
+      const viewingMax =
+        root["results"]["agg_percentiles_value"]["values"]["75.0"];
       return viewingMax + viewingMax / 10;
     },
-    yMin: root => root["agg_stats_value"].min,
+    yMin: root => root["results"]["agg_stats_value"]["min"],
     xMax: root => 0,
     xMin: root => 100
   }
 };
-async function getGcBias(analysis, quality, selectionOrder) {
+const createMappingByField = (results, keyWord) =>
+  results.reduce((final, record) => {
+    const expCondition = record["_source"]["experimental_condition"];
+    const cellID = record["_source"][keyWord];
+
+    final[expCondition] = final[expCondition]
+      ? [...final[expCondition], cellID]
+      : [cellID];
+
+    return final;
+  }, {});
+async function getGcBias(analysis, quality, selectedCells, isGrouped) {
   const client = createSuperUserClient();
-  const cellIDQuery = selectionOrder
-    ? bodybuilder()
-        .size(10000)
-        .filter("range", "quality", { gte: parseFloat(quality) })
-        .filter("terms", "order", selectionOrder)
-        .build()
-    : bodybuilder()
-        .size(10000)
-        .filter("range", "quality", { gte: parseFloat(quality) })
-        .build();
+  const cellIDQuery =
+    selectedCells.length > 0
+      ? bodybuilder()
+          .size(50000)
+          .filter("range", "quality", { gte: parseFloat(quality) })
+          .filter("terms", "order", selectedCells)
+          .build()
+      : bodybuilder()
+          .size(50000)
+          .filter("range", "quality", { gte: parseFloat(quality) })
+          .build();
 
   const cellIDResults = await client.search({
     index: `${analysis.toLowerCase()}_qc`,
     body: cellIDQuery
   });
+  const results = cellIDResults["body"]["hits"]["hits"];
+  if (isGrouped) {
+    const filteredCellIDs = createMappingByField(results, "cell_id");
+    const filteredCellOrder = createMappingByField(results, "order");
+    var categorySeperatedResults = await Object.keys(filteredCellIDs).map(
+      async category => {
+        const query = bodybuilder()
+          .size(0)
+          .filter("terms", "cell_id", filteredCellIDs[category])
+          .aggregation("terms", "gc_percent", { size: 200 }, a =>
+            a
+              .aggregation("extended_stats", "value")
+              .aggregation("percentiles", "value")
+              .aggregation("terms", "cell_id")
+          )
+          .aggregation("stats", "value")
+          .aggregation("percentiles", "value")
+          .build();
 
-  const filteredCellIDs = cellIDResults["body"]["hits"]["hits"].map(
-    record => record["_source"]["cell_id"]
-  );
+        const results = await client.search({
+          index: `${analysis.toLowerCase()}_gc_bias`,
+          body: query
+        });
 
-  const query = bodybuilder()
-    .size(0)
-    .filter("terms", "cell_id", filteredCellIDs)
-    .aggregation("terms", "gc_percent", { size: 200 }, a =>
-      a
-        .aggregation("extended_stats", "value")
-        .aggregation("percentiles", "value")
-    )
-    .aggregation("stats", "value")
-    .aggregation("percentiles", "value")
-    .build();
+        return {
+          category: category,
+          results: results["body"]["aggregations"],
+          cells: [...filteredCellOrder[category]]
+        };
+      }
+    );
+    return Promise.all(categorySeperatedResults);
+  } else {
+    const cellIDs = cellIDResults["body"]["hits"]["hits"].map(
+      entry => entry["_source"]["cell_id"]
+    );
+    const order = cellIDResults["body"]["hits"]["hits"].map(
+      entry => entry["_source"]["order"]
+    );
+    const query = bodybuilder()
+      .size(0)
+      .filter("terms", "cell_id", cellIDs)
+      .aggregation("terms", "gc_percent", { size: 200 }, a =>
+        a
+          .aggregation("extended_stats", "value")
+          .aggregation("percentiles", "value")
+      )
+      .aggregation("stats", "value")
+      .aggregation("percentiles", "value")
+      .build();
 
-  const results = await client.search({
-    index: `${analysis.toLowerCase()}_gc_bias`,
-    body: query
-  });
+    const results = await client.search({
+      index: `${analysis.toLowerCase()}_gc_bias`,
+      body: query
+    });
 
-  return results["body"]["aggregations"];
+    return [
+      {
+        category: "All",
+        results: results["body"]["aggregations"],
+        cells: [...order]
+      }
+    ];
+  }
 }

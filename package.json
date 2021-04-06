@@ -4,9 +4,6 @@
   "main": "index.js",
   "author": "redpanda-cat <leungs1@mskcc.org>",
   "license": "MIT",
-  "directories": {
-    "./src/api/utils/emailTemplates": "./src/api/utils/emailTemplates"
-  },
   "dependencies": {
     "@babel/polyfill": "^7.4.0",
     "@elastic/elasticsearch": "^7.0.0-rc.2",
