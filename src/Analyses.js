@@ -19,7 +19,8 @@ const FIELD_NAMES = {
 
 export const schema = gql`
   extend type Query {
-    analyses(filters: [Term]!, auth: ApiUser, dashboardName: String!): Analyses
+    analyses(filters: [Term]!, auth: ApiUser!, dashboardName: String!): Analyses
+    analysisMetadata(analysis: String!): AnalysisRow
   }
   input Term {
     label: String!
@@ -31,6 +32,14 @@ export const schema = gql`
     analysesStats: [Stat!]!
     analysesList: [AnalysisGroup!]
     analysesTree: AnalysesTree
+    analysesRows: [AnalysisRow]
+  }
+
+  type AnalysisRow {
+    project: String
+    sample_id: String!
+    library_id: String!
+    jira_id: String!
   }
   type AnalysesTree {
     source: String
@@ -160,6 +169,12 @@ export const resolvers = {
     source: root => root.source,
     value: () => 1
   },
+  AnalysisRow: {
+    project: root => root.project,
+    sample_id: root => root.sample_id.join(","),
+    library_id: root => root.library_id.join(","),
+    jira_id: root => root.jira_id
+  },
   AnalysesTree: {
     source: () => null,
     children: root => filterChildren({ filtered: [...root] }, 0)
@@ -184,6 +199,24 @@ export const resolvers = {
     value: root => root.value
   },
   Query: {
+    analysisMetadata: async (_, { analysis }) => {
+      const baseQuery = bodybuilder().size(10000);
+      const analysisFormatted = analysis.toUpperCase();
+      const client = createSuperUserClient();
+
+      const data = await client.search(
+        {
+          index: "analyses",
+          body: baseQuery.build()
+        },
+        {
+          ignore: [401]
+        }
+      );
+
+      const source = data["body"]["hits"]["hits"].map(hit => hit["_source"]);
+      return source.filter(hit => hit["jira_id"] === analysisFormatted)[0];
+    },
     analyses: async (_, { filters, auth, dashboardName }) => {
       const data = await getAnalyses(filters, auth, dashboardName);
       if (data) {
