@@ -60,8 +60,6 @@ const getAllDashboards = async client => {
     });
 };
 const deleteDashboard = async name => {
-  const client = createSuperUserClient();
-
   const deleteRoleResponse = await client.security.deleteRole({
     name: name + "_dashboardReader",
     refresh: "wait_for"
@@ -182,7 +180,6 @@ export const resolvers = {
       const lastSelectedDashboard = await getKey(
         cacheConfig["lastSelectedProject"] + auth.uid
       );
-
       if (authorizedDashboards[0] === "superuser") {
         const client = createSuperUserClient();
         const allDashboards = await getAllDashboards(client);
