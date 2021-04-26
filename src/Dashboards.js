@@ -51,7 +51,7 @@ const getAllDashboards = async client => {
   var response = await client.security.getRole({});
 
   return Object.keys(response.body)
-    .filter(role => role.indexOf("_dashboardReader") !== -1)
+    .filter(role => role.indexOf(cacheConfig["dashboardRoles"]) !== -1)
     .map(role => {
       return {
         name: role.split("_")[0],
@@ -60,8 +60,9 @@ const getAllDashboards = async client => {
     });
 };
 const deleteDashboard = async name => {
+  const client = createSuperUserClient();
   const deleteRoleResponse = await client.security.deleteRole({
-    name: name + "_dashboardReader",
+    name: name + cacheConfig["dashboardRoles"],
     refresh: "wait_for"
   });
   return deleteRoleResponse;
@@ -71,6 +72,7 @@ const updateDashboard = async (name, indices) => {
   const created = await createDashboard(name, indices);
   return created;
 };
+
 const getUserRoles = async username => {
   const client = createSuperUserClient();
   var response = await client.security.getUser({ username: username });
@@ -79,7 +81,7 @@ const getUserRoles = async username => {
 
 export const getIndicesByDashboard = async name => {
   const client = createSuperUserClient();
-  const roleName = name + "_dashboardReader";
+  const roleName = name + cacheConfig["dashboardRoles"];
 
   var analyses = await client.security.getRole({
     name: roleName
@@ -93,7 +95,7 @@ const createDashboard = async (name, indices) => {
   const client = createSuperUserClient();
 
   const dashboardRoles = await client.security.putRole({
-    name: name + "_dashboardReader",
+    name: name + cacheConfig["dashboardRoles"],
     body: {
       indices: [
         {

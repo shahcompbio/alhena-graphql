@@ -12,10 +12,10 @@ const client = (authKey, authKeyID) =>
     auth: {
       apiKey: {
         id: authKeyID,
-        api_key: authKey,
-      },
+        api_key: authKey
+      }
     },
-    ssl: { rejectUnauthorized: false },
+    ssl: { rejectUnauthorized: false }
   });
 
 export default client;
