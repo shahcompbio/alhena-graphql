@@ -7,6 +7,7 @@ import client from "./api/client";
 import bodybuilder from "bodybuilder";
 import _ from "lodash";
 
+import cacheConfig from "./api/cacheConfigs.js";
 import { createSuperUserClient } from "./utils.js";
 import { getApiId, getIndicesByDashboard } from "./Dashboards";
 
@@ -21,6 +22,7 @@ const FIELD_NAMES = {
 export const schema = gql`
   extend type Query {
     analyses(filters: [Term]!, auth: ApiUser!, dashboardName: String!): Analyses
+    analysisMetadata(analysis: String!): AnalysisRow
   }
   input Term {
     label: String!
@@ -29,9 +31,18 @@ export const schema = gql`
 
   type Analyses {
     error: Boolean
+    defaultProjectView: Int!
     analysesStats: [Stat!]!
     analysesList: [AnalysisGroup!]
     analysesTree: AnalysesTree
+    analysesRows: [AnalysisRow]
+  }
+
+  type AnalysisRow {
+    project: String
+    sample_id: String!
+    library_id: String!
+    jira_id: String!
   }
   type AnalysesTree {
     source: String
@@ -81,6 +92,8 @@ const filterChildren = (root, hierarchyLevel) => {
 };
 
 const getAnalyses = async (filters, auth, dashboardName) => {
+  //set last selected project for user
+  await redis.set(cacheConfig["lastSelectedProject"] + auth.uid, dashboardName);
   const baseQuery = bodybuilder().size(10000);
 
   const query =
@@ -136,9 +149,11 @@ const getUniqueValuesInKey = (list, key) =>
 export const resolvers = {
   Analyses: {
     error: root => root.error,
+    defaultProjectView: root => root.defaultProjectView,
     analysesStats: root => root.stats,
     analysesList: root => root.list,
-    analysesTree: root => root.tree
+    analysesTree: root => root.tree,
+    analysesRows: root => root.tree
   },
 
   ParentType: {
@@ -148,6 +163,12 @@ export const resolvers = {
   ChildType: {
     source: root => root.source,
     value: () => 1
+  },
+  AnalysisRow: {
+    project: root => root.project,
+    sample_id: root => root.sample_id,
+    library_id: root => root.library_id,
+    jira_id: root => root.jira_id
   },
   AnalysesTree: {
     source: () => null,
@@ -173,9 +194,29 @@ export const resolvers = {
     value: root => root.value
   },
   Query: {
+    analysisMetadata: async (_, { analysis }) => {
+      const baseQuery = bodybuilder().size(10000);
+
+      const client = createSuperUserClient();
+
+      const data = await client.search(
+        {
+          index: "analyses",
+          body: baseQuery.build()
+        },
+        {
+          ignore: [401]
+        }
+      );
+      const source = data["body"]["hits"]["hits"].map(hit => hit["_source"]);
+      return source.filter(hit => hit["jira_id"] === analysis)[0];
+    },
     analyses: async (_, { filters, auth, dashboardName }) => {
       const data = await getAnalyses(filters, auth, dashboardName);
       if (data) {
+        const defaultProjectView = await redis.get(
+          cacheConfig["isSpiderSelectionDefault"] + auth.uid
+        );
         const counts = FIELD_HIERARCHY.map(field => {
           const values = getUniqueValuesInKey(data, field);
 
@@ -189,6 +230,8 @@ export const resolvers = {
 
         return {
           error: false,
+          defaultProjectView:
+            defaultProjectView !== null ? defaultProjectView : 0,
           tree: data,
           list: counts,
           stats: counts
@@ -196,6 +239,7 @@ export const resolvers = {
       } else {
         return {
           error: true,
+          defaultProjectView: 0,
           tree: [],
           list: [],
           stats: []

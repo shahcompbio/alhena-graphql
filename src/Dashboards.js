@@ -6,12 +6,13 @@ import client from "./api/client";
 import authClient from "./api/authClient";
 
 import { createSuperUserClient, getRedisApiKey } from "./utils.js";
+import cacheConfig from "./api/cacheConfigs.js";
 
 import _ from "lodash";
 
 export const schema = gql`
   extend type Query {
-    getDashboardsByUser(auth: ApiUser!): [Dashboard]
+    getDashboardsByUser(auth: ApiUser!): UserDashboard
     getAllDashboards(auth: ApiUser!): [Dashboard]
     getAllIndices: [Index!]
     getIndicesByDashboard(dashboard: String!): [Index]
@@ -36,6 +37,10 @@ export const schema = gql`
     name: String!
     count: Int
   }
+  type UserDashboard {
+    dashboards: [Dashboard]!
+    defaultDashboard: String
+  }
 `;
 var collator = new Intl.Collator(undefined, {
   numeric: true,
@@ -46,7 +51,7 @@ const getAllDashboards = async client => {
   var response = await client.security.getRole({});
 
   return Object.keys(response.body)
-    .filter(role => role.indexOf("_dashboardReader") !== -1)
+    .filter(role => role.indexOf(cacheConfig["dashboardRoles"]) !== -1)
     .map(role => {
       return {
         name: role.split("_")[0],
@@ -56,9 +61,8 @@ const getAllDashboards = async client => {
 };
 const deleteDashboard = async name => {
   const client = createSuperUserClient();
-
   const deleteRoleResponse = await client.security.deleteRole({
-    name: name + "_dashboardReader",
+    name: name + cacheConfig["dashboardRoles"],
     refresh: "wait_for"
   });
   return deleteRoleResponse;
@@ -68,6 +72,7 @@ const updateDashboard = async (name, indices) => {
   const created = await createDashboard(name, indices);
   return created;
 };
+
 const getUserRoles = async username => {
   const client = createSuperUserClient();
   var response = await client.security.getUser({ username: username });
@@ -76,7 +81,7 @@ const getUserRoles = async username => {
 
 export const getIndicesByDashboard = async name => {
   const client = createSuperUserClient();
-  const roleName = name + "_dashboardReader";
+  const roleName = name + cacheConfig["dashboardRoles"];
 
   var analyses = await client.security.getRole({
     name: roleName
@@ -90,7 +95,7 @@ const createDashboard = async (name, indices) => {
   const client = createSuperUserClient();
 
   const dashboardRoles = await client.security.putRole({
-    name: name + "_dashboardReader",
+    name: name + cacheConfig["dashboardRoles"],
     body: {
       indices: [
         {
@@ -128,7 +133,14 @@ const getApiId = async uid => {
     )[0].id;
   }
 };
+
+const getKey = async key => await redis.get(key);
+
 export const resolvers = {
+  UserDashboard: {
+    dashboards: root => root.dashboards,
+    defaultDashboard: root => root.defaultDashboard
+  },
   Dashboard: {
     name: root => root.name,
     count: root => root.count
@@ -167,19 +179,34 @@ export const resolvers = {
     },
     async getDashboardsByUser(_, { auth }) {
       const authorizedDashboards = await getUserRoles(auth.uid);
+      const lastSelectedDashboard = await getKey(
+        cacheConfig["lastSelectedProject"] + auth.uid
+      );
       if (authorizedDashboards[0] === "superuser") {
         const client = createSuperUserClient();
         const allDashboards = await getAllDashboards(client);
-        return allDashboards.map(dashboard => ({ name: dashboard["name"] }));
+        return {
+          defaultDashboard: lastSelectedDashboard
+            ? lastSelectedDashboard
+            : allDashboards[0]["name"],
+          dashboards: allDashboards.map(dashboard => ({
+            name: dashboard["name"]
+          }))
+        };
       }
-      return authorizedDashboards.reduce((final, dashboardName) => {
-        return [
-          ...final,
-          {
-            name: dashboardName.split("_")[0]
-          }
-        ];
-      }, []);
+      return {
+        defaultDashboard: lastSelectedDashboard
+          ? lastSelectedDashboard
+          : authorizedDashboards[0].split("_")[0],
+        dashboards: authorizedDashboards.reduce((final, dashboardName) => {
+          return [
+            ...final,
+            {
+              name: dashboardName.split("_")[0]
+            }
+          ];
+        }, [])
+      };
     }
   }
 };
