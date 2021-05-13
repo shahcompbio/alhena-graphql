@@ -331,7 +331,7 @@ const generateNewUserLink = async newUser => {
   );
   await redis.expireat(
     cacheConfig["newUserDashboardRoles"] + newUser.email,
-    parseInt(+new Date() / 1000) + 86400
+    parseInt(+new Date() / 1000) + 7 * 86400
   );
   //store admin role
   await redis.set(
