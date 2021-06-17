@@ -103,11 +103,8 @@ export const resolvers = {
       const client = createSuperUserClient();
       const query = bodybuilder()
         .size(0)
-        .agg(
-          "terms",
-          "chrom_number",
-          { size: 50000, order: { _term: "asc" } },
-          a => a.agg("max", "end").agg("min", "start")
+        .agg("terms", "chr", { size: 50000, order: { _term: "asc" } }, a =>
+          a.agg("max", "end").agg("min", "start")
         )
         .build();
 
@@ -116,7 +113,7 @@ export const resolvers = {
         body: query
       });
 
-      return results.body.aggregations.agg_terms_chrom_number.buckets;
+      return results.body.aggregations.agg_terms_chr.buckets;
     },
     async numericalDataFilters(_, { analysis, quality, params }) {
       return await getDataFilters(analysis, quality, params);
@@ -176,11 +173,11 @@ export const resolvers = {
     localMin: root => round(root.localStats.min)
   },
   Bin: {
-    id: root => root.cell_id + root.start + root.chrom_number,
+    id: root => root.cell_id + root.start + root.chr,
     state: root => root.state,
     start: root => root.start,
     end: root => root.end,
-    chromNumber: root => root.chrom_number,
+    chromNumber: root => root.chr,
     copy: root => root.copy
   },
   AnalysisStats: {
@@ -220,7 +217,7 @@ export const resolvers = {
     }
   },
   Seg: {
-    chromosome: root => root.chrom_number,
+    chromosome: root => root.chr,
     start: root => root.start,
     end: root => root.end,
     state: root => root.state
@@ -327,7 +324,7 @@ async function getHeatmapOrderByParam(analysis, params, quality) {
 async function getAllHeatmapOrder(analysis, quality) {
   const client = createSuperUserClient();
   const query = bodybuilder()
-    .size(50000)
+    .size(5)
     .sort("order", "asc")
     .filter("exists", "order")
     .filter("range", "quality", { gte: parseFloat(quality) })

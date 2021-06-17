@@ -40,6 +40,7 @@ export const schema = gql`
     sample_id: String!
     library_id: String!
     jira_id: String!
+    dashboard: String!
   }
   type AnalysesTree {
     source: String
@@ -171,9 +172,12 @@ export const resolvers = {
   },
   AnalysisRow: {
     project: root => root.project,
-    sample_id: root => root.sample_id.join(","),
-    library_id: root => root.library_id.join(","),
-    jira_id: root => root.jira_id
+    sample_id: root =>
+      Array.isArray(root.sample_id) ? root.sample_id.join(",") : root.sample_id,
+    library_id: root =>
+      Array.isArray(root.library_id) ? root.library_id.join(",") : root.pool_id,
+    jira_id: root => root.jira_id,
+    dashboard: root => root.dashboard_type
   },
   AnalysesTree: {
     source: () => null,
@@ -215,6 +219,7 @@ export const resolvers = {
       );
 
       const source = data["body"]["hits"]["hits"].map(hit => hit["_source"]);
+
       return source.filter(hit => hit["jira_id"] === analysisFormatted)[0];
     },
     analyses: async (_, { filters, auth, dashboardName }) => {

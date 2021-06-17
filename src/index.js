@@ -13,6 +13,7 @@ import * as gcBias from "./GCBias.js";
 import * as scatterplot from "./Scatterplot.js";
 import * as violin from "./Violin.js";
 import * as cache from "./Cache.js";
+import * as table from "./Table.js";
 
 import { makeExecutableSchema } from "graphql-tools";
 import { merge } from "lodash";
@@ -33,7 +34,8 @@ const schema = makeExecutableSchema({
     gcBias.schema,
     scatterplot.schema,
     violin.schema,
-    cache.schema
+    cache.schema,
+    table.schema
   ],
   resolvers: merge(
     analyses.resolvers,
@@ -44,7 +46,8 @@ const schema = makeExecutableSchema({
     gcBias.resolvers,
     scatterplot.resolvers,
     violin.resolvers,
-    cache.resolvers
+    cache.resolvers,
+    table.resolvers
   ),
   inheritResolversFromInterfaces: true
 });
