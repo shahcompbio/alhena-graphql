@@ -112,8 +112,36 @@ export const resolvers = {
         index: `${analysis.toLowerCase()}_segs`,
         body: query
       });
+      var reA = /[^a-zA-Z]/g;
+      var reN = /[^0-9]/g;
+      const sortedChrom = results.body.aggregations.agg_terms_chr.buckets.sort(
+        (a, b) => {
+          var AInt = parseInt(a["key"], 10);
+          var BInt = parseInt(b["key"], 10);
 
-      return results.body.aggregations.agg_terms_chr.buckets;
+          if (isNaN(AInt) && isNaN(BInt)) {
+            var aA = a["key"].replace(reA, "");
+            var bA = b["key"].replace(reA, "");
+            if (aA === bA) {
+              var aN = parseInt(a["key"].replace(reN, ""), 10);
+              var bN = parseInt(b["key"].replace(reN, ""), 10);
+              return aN === bN ? 0 : aN > bN ? 1 : -1;
+            } else {
+              return aA > bA ? 1 : -1;
+            }
+          } else if (isNaN(AInt)) {
+            //A is not an Int
+            return 1; //to make alphanumeric sort first return -1 here
+          } else if (isNaN(BInt)) {
+            //B is not an Int
+            return -1; //to make alphanumeric sort first return 1 here
+          } else {
+            return AInt > BInt ? 1 : -1;
+          }
+        }
+      );
+      console.log(sortedChrom);
+      return sortedChrom;
     },
     async numericalDataFilters(_, { analysis, quality, params }) {
       return await getDataFilters(analysis, quality, params);
@@ -324,7 +352,7 @@ async function getHeatmapOrderByParam(analysis, params, quality) {
 async function getAllHeatmapOrder(analysis, quality) {
   const client = createSuperUserClient();
   const query = bodybuilder()
-    .size(5)
+    .size(50000)
     .sort("order", "asc")
     .filter("exists", "order")
     .filter("range", "quality", { gte: parseFloat(quality) })

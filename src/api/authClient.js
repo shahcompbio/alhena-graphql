@@ -9,7 +9,7 @@ const URL = process.env.ELASTICSEARCH_NODE || "https://" + HOST + ":" + PORT;
 
 const authClient = (user, password) =>
   new Client({
-    // node: "https://localhost:2212",
+    //node: "https://localhost:2212",
     node: URL,
     auth: {
       username: user,
