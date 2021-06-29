@@ -167,3 +167,9 @@ export const configConsts = [
     class: "boolean"
   }
 ];
+//  { type: "project", label: "Project" },
+export const defaultDashboardColumns = [
+  { type: "sample_id", label: "Sample ID" },
+  { type: "library_id", label: "Library ID" },
+  { type: "jira_id", label: "Jira Ticket" }
+];

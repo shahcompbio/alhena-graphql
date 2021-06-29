@@ -16,6 +16,9 @@ const cacheConfig = {
   newUserIsAdmin: "isAdmin_",
 
   //save params in url link
-  copyUrl: "copyUrl_"
+  copyUrl: "copyUrl_",
+
+  //Set dynamic dashboard columns
+  dahboardColumns: "dynamicDashboardColumns_"
 };
 export default cacheConfig;

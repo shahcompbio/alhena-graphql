@@ -7,18 +7,31 @@ import authClient from "./api/authClient";
 
 import { createSuperUserClient, getRedisApiKey } from "./utils.js";
 import cacheConfig from "./api/cacheConfigs.js";
+import { defaultDashboardColumns } from "./config.js";
 
 import _ from "lodash";
 
 export const schema = gql`
   extend type Query {
     getDashboardsByUser(auth: ApiUser!): UserDashboard
+
+    getAvailableDashboardColumns: [DashboardColumns!]
+    setDashboardColumnsByDashboard(
+      dashboard: String!
+      columns: [String!]
+    ): CreationAcknowledgement
+    getDashboardColumnsByDashboard(dashboard: String!): [DashboardColumns!]
+
     getAllDashboards(auth: ApiUser!): [Dashboard]
     getAllIndices: [Index!]
     getIndicesByDashboard(dashboard: String!): [Index]
-    deleteDashboard(name: String!): DeleteAcknowledgment
+
+    deleteDashboardByName(name: String!): DeleteAcknowledgment
     createNewDashboard(dashboard: DashboardInput!): CreationAcknowledgement
-    updateDashboard(dashboard: DashboardInput!): UpdateAcknowledgement
+    updateDashboardByName(dashboard: DashboardInput!): UpdateAcknowledgement
+
+    getDashboardUsers(name: String!): [AppUsers]
+    getAllUsers: [AppUsers]
   }
   type UpdateAcknowledgement {
     updated: Boolean!
@@ -27,8 +40,11 @@ export const schema = gql`
     allDeleted: Boolean
   }
   input DashboardInput {
-    name: String
+    name: String!
     indices: [String!]
+    columns: [String!]
+    users: [String!]
+    deletedUsers: [String]
   }
   type Index {
     name: String
@@ -36,6 +52,10 @@ export const schema = gql`
   type Dashboard {
     name: String!
     count: Int
+  }
+  type DashboardColumns {
+    type: String
+    label: String
   }
   type UserDashboard {
     dashboards: [Dashboard]!
@@ -46,7 +66,31 @@ var collator = new Intl.Collator(undefined, {
   numeric: true,
   sensitivity: "base"
 });
+const getAvailableDashboardColumns = () => {
+  return defaultDashboardColumns;
+};
+const getDashboardColumnsByDashboard = async name => {
+  const columns = await redis.get(cacheConfig["dahboardColumns"] + name);
+  if (columns === null) {
+    return defaultDashboardColumns;
+  } else {
+    const columnConstants = defaultDashboardColumns.reduce((final, column) => {
+      final[column["type"]] = column["label"];
+      return final;
+    }, {});
 
+    const columnList = columns.split(",");
+    return columnList.map(column => ({
+      type: column,
+      label: columnConstants[column]
+    }));
+  }
+};
+const setDashboardColumns = async (name, selectedDashboardColumns) => {
+  const join = selectedDashboardColumns.join(",");
+  const red = await redis.set(cacheConfig["dahboardColumns"] + name, join);
+  return true;
+};
 const getAllDashboards = async client => {
   var response = await client.security.getRole({});
 
@@ -59,18 +103,78 @@ const getAllDashboards = async client => {
       };
     });
 };
+const getAllUsers = async () => {
+  const client = createSuperUserClient();
+  const superUsers = [
+    "elastic",
+    "kibana",
+    "logstash_system",
+    "beats_system",
+    "apm_system",
+    "remote_monitoring_user"
+  ];
+
+  const allUsers = await client.security.getUser({});
+  return Object.keys(allUsers.body).reduce((final, user) => {
+    if (superUsers.indexOf(user) === -1) {
+      final = [...final, allUsers.body[user]];
+    }
+
+    return final;
+  }, []);
+};
+const getAllDashboardUsers = async name => {
+  const client = createSuperUserClient();
+
+  const allUsers = await client.security.getUser({});
+  return Object.keys(allUsers.body).reduce((final, user) => {
+    const userObj = allUsers.body[user];
+
+    if (userObj.roles.indexOf(name + cacheConfig["dashboardRoles"]) != -1) {
+      final = [...final, allUsers.body[user]];
+    }
+    return final;
+  }, []);
+};
+
 const deleteDashboard = async name => {
   const client = createSuperUserClient();
+  const allUsersLastProjKeys = await redis.keys(
+    cacheConfig["lastSelectedProject"] + "*"
+  );
+  const allUsersLastProj = await redis.mget(allUsersLastProjKeys);
+  const projIndices = allUsersLastProj.reduce((final, curr, index) => {
+    if (curr === name) {
+      final = [...final, index];
+    }
+    return final;
+  }, []);
+
+  if (projIndices.length > 0) {
+    projIndices.map(index => {
+      redis.del(allUsersLastProjKeys[index]);
+    });
+  }
+  await deletedUsersFromDashboard(name);
   const deleteRoleResponse = await client.security.deleteRole({
     name: name + cacheConfig["dashboardRoles"],
     refresh: "wait_for"
   });
+
   return deleteRoleResponse;
 };
-const updateDashboard = async (name, indices) => {
-  const deleteResponse = await deleteDashboard(name);
-  const created = await createDashboard(name, indices);
-  return created;
+const updateDashboard = async (name, indices, columns, users, deletedUsers) => {
+  const client = createSuperUserClient();
+
+  const created = await createDashboard(
+    name,
+    indices,
+    columns,
+    users,
+    deletedUsers
+  );
+  //es docs say on update response is false
+  return { created: created["created"] === false };
 };
 
 const getUserRoles = async username => {
@@ -91,9 +195,14 @@ export const getIndicesByDashboard = async name => {
     hit => hit !== "analyses"
   );
 };
-const createDashboard = async (name, indices) => {
+const createDashboard = async (name, indices, columns, users, deletedUsers) => {
   const client = createSuperUserClient();
+  //columns
+  const news = await setDashboardColumns(name, columns);
+  //users
+  const usersResponse = await appendUsersToDashboard(name, users, deletedUsers);
 
+  //roles
   const dashboardRoles = await client.security.putRole({
     name: name + cacheConfig["dashboardRoles"],
     body: {
@@ -107,7 +216,66 @@ const createDashboard = async (name, indices) => {
   });
   return dashboardRoles.body.role;
 };
+const deletedUsersFromDashboard = async name => {
+  const client = createSuperUserClient();
+  var userContent = await client.security.getUser({});
 
+  const newUserObj = Object.keys(userContent["body"]).reduce((final, user) => {
+    var userObj = userContent["body"][user];
+    //if the user has this dashboard delete
+    if (userObj["roles"].indexOf(name + cacheConfig["dashboardRoles"]) !== -1) {
+      userObj["roles"] = userObj["roles"].filter(
+        role => role !== name + cacheConfig["dashboardRoles"]
+      );
+    }
+    final[user] = userObj;
+    return final;
+  }, {});
+
+  //update users
+  Object.keys(newUserObj).map(async user => {
+    var userResponses = await client.security.putUser({
+      username: user,
+      refresh: "wait_for",
+      body: { ...newUserObj[user] }
+    });
+  });
+  return;
+};
+const appendUsersToDashboard = async (name, users, deletedUsers) => {
+  const client = createSuperUserClient();
+  const allUsers =
+    deletedUsers.length === 0 ? [...users] : [...users, ...deletedUsers];
+
+  var userContent = await client.security.getUser({
+    username: [...allUsers]
+  });
+
+  const newUserObj = Object.keys(userContent["body"]).reduce((final, user) => {
+    var userObj = userContent["body"][user];
+    if (deletedUsers.indexOf(user) !== -1) {
+      userObj["roles"] = userObj["roles"].filter(
+        role => role !== name + cacheConfig["dashboardRoles"]
+      );
+    } else {
+      userObj["roles"] =
+        userObj["roles"].indexOf(name + cacheConfig["dashboardRoles"]) === -1
+          ? [...userObj["roles"], name + cacheConfig["dashboardRoles"]]
+          : [...userObj["roles"]];
+    }
+    final[user] = userObj;
+    return final;
+  }, {});
+
+  Object.keys(newUserObj).map(async user => {
+    var userResponses = await client.security.putUser({
+      username: user,
+      refresh: "wait_for",
+      body: { ...newUserObj[user] }
+    });
+  });
+  return;
+};
 const getIndices = async () => {
   const client = createSuperUserClient();
 
@@ -154,15 +322,37 @@ export const resolvers = {
   UpdateAcknowledgement: {
     updated: root => root.created
   },
+  DashboardColumns: {
+    type: root => root.type,
+    label: root => root.label
+  },
   Query: {
-    async updateDashboard(_, { dashboard }) {
-      return await updateDashboard(dashboard.name, dashboard.indices);
+    async getAllUsers() {
+      return await getAllUsers();
     },
-    async deleteDashboard(_, { name }) {
+    async getDashboardUsers(_, { name }) {
+      return await getAllDashboardUsers(name);
+    },
+    async updateDashboardByName(_, { dashboard }) {
+      return await updateDashboard(
+        dashboard.name,
+        dashboard.indices,
+        dashboard.columns,
+        dashboard.users,
+        dashboard.deletedUsers
+      );
+    },
+    async deleteDashboardByName(_, { name }) {
       return await deleteDashboard(name);
     },
     async createNewDashboard(_, { dashboard }) {
-      return await createDashboard(dashboard.name, dashboard.indices);
+      return await createDashboard(
+        dashboard.name,
+        dashboard.indices,
+        dashboard.columns,
+        dashboard.users,
+        []
+      );
     },
     async getAllIndices() {
       return await getIndices();
@@ -177,14 +367,25 @@ export const resolvers = {
     async getIndicesByDashboard(_, { dashboard }) {
       return await getIndicesByDashboard(dashboard);
     },
+    async getDashboardColumnsByDashboard(_, { dashboard }) {
+      return await getDashboardColumnsByDashboard(dashboard);
+    },
+    async setDashboardColumnsByDashboard(_, { dashboard, columns }) {
+      return await setDashboardColumns(dashboard, columns);
+    },
+    async getAvailableDashboardColumns() {
+      return await getAvailableDashboardColumns();
+    },
     async getDashboardsByUser(_, { auth }) {
       const authorizedDashboards = await getUserRoles(auth.uid);
-      const lastSelectedDashboard = await getKey(
+      var lastSelectedDashboard = await getKey(
         cacheConfig["lastSelectedProject"] + auth.uid
       );
+
       if (authorizedDashboards[0] === "superuser") {
         const client = createSuperUserClient();
         const allDashboards = await getAllDashboards(client);
+
         return {
           defaultDashboard: lastSelectedDashboard
             ? lastSelectedDashboard
