@@ -12,7 +12,12 @@ const round = num => Math.round(num * 100) / 100;
 export const schema = gql`
   extend type Query {
     chromosomes(analysis: String!): [Chromosome]
-    segs(analysis: String!, indices: [Int!]!, quality: String!): [SegRow]
+    segs(
+      analysis: String!
+      indices: [Int!]!
+      quality: String!
+      heatmapWidth: Int!
+    ): [SegRow]
     bins(analysis: String!, id: String!): [Bin]
     analysisStats(analysis: String, indices: [Int!]!): AnalysisStats!
     heatmapOrder(analysis: String, quality: String!): [HeatmapOrder]
@@ -146,9 +151,40 @@ export const resolvers = {
       return await getAllHeatmapOrder(analysis, quality);
     },
 
-    async segs(_, { analysis, indices, quality }) {
+    async segs(_, { analysis, indices, quality, heatmapWidth }) {
+      const client = createSuperUserClient();
+      const chromosomeQuery = bodybuilder()
+        .size(0)
+        .agg(
+          "terms",
+          "chrom_number",
+          { size: 50000, order: { _term: "asc" } },
+          a => a.agg("max", "end").agg("min", "start")
+        )
+        .build();
+
+      const chromResults = await client.search({
+        index: `${analysis.toLowerCase()}_segs`,
+        body: chromosomeQuery
+      });
+
+      const chrom = chromResults["body"]["aggregations"][
+        "agg_terms_chrom_number"
+      ]["buckets"].map(hit => {
+        return {
+          chromosome: hit["key"],
+          start: hit["agg_min_start"]["value"],
+          end: hit["agg_max_end"]["value"]
+        };
+      });
+
       const results = await getIDsForIndices(analysis, indices, quality);
-      return results.body.hits.hits.map(id => ({ ...id["_source"], analysis }));
+      return results.body.hits.hits.map(id => ({
+        ...id["_source"],
+        analysis,
+        width: heatmapWidth,
+        chrom: chrom
+      }));
     },
     async heatmapOrderFromParameter(_, { analysis, params, quality }) {
       const results = await getHeatmapOrderByParam(analysis, params, quality);
@@ -210,8 +246,15 @@ export const resolvers = {
     segs: async root => {
       const analysis = root.analysis;
       const id = root.cell_id;
+      const width = root.width;
+      const totalBP = root.chrom.reduce(
+        (sum, chrom) => sum + chrom.end - chrom.start + 1,
+        0
+      );
 
-      return await getSegsForID(analysis, id);
+      const bpRatio = Math.ceil(totalBP / width);
+
+      return await getSegsForID(analysis, id, bpRatio);
     }
   },
   Seg: {
@@ -420,16 +463,18 @@ async function getIDsForIndices(analysis, indices, quality) {
   return results;
 }
 
-async function getSegsForID(analysis, id) {
+async function getSegsForID(analysis, id, bpRatio) {
   const client = createSuperUserClient();
   const query = bodybuilder()
     .size(50000)
     .filter("term", "cell_id", id)
     .build();
+
   const results = await client.search({
     index: `${analysis.toLowerCase()}_segs`,
     body: query
   });
-
-  return results.body.hits.hits.map(seg => seg["_source"]);
+  return results.body.hits.hits
+    .map(seg => seg["_source"])
+    .filter(seg => Math.floor((seg.end - seg.start + 1) / bpRatio) >= 0);
 }
