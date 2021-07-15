@@ -27,6 +27,8 @@ export const schema = gql`
       name: String!
       isAdmin: Boolean!
     ): CreationAcknowledgement
+
+    removeDashbaordFromUsers(name: String!): DeletionAcknowledgement
     deleteUser(username: String!): DeletionAcknowledgement
     allowResetPassword(username: String!): ConfirmationHashLink
     changePassword(username: String!, newPassword: String!): Acknowledgement
@@ -130,6 +132,7 @@ const allowResetPassword = async username => {
     "https://" + process.env.SERVER_NAME + "/resetPassword/" + redisSecretHash
   );
 };
+
 const updatePassword = async (username, newPassword) => {
   const client = createSuperUserClient();
 
@@ -142,7 +145,30 @@ const updatePassword = async (username, newPassword) => {
   });
   return response.statusCode;
 };
+const removeDashbaordFromUsers = async name => {
+  const client = createSuperUserClient();
+  var userContent = await client.security.getUser({});
 
+  const newUserObj = Object.keys(userContent["body"]).reduce((final, user) => {
+    var userObj = userContent["body"][user];
+    //if the user has this dashboard delete
+    if (userObj["roles"].indexOf(name + cacheConfig["dashboardRoles"]) !== -1) {
+      userObj["roles"] = userObj["roles"].filter(
+        role => role !== name + cacheConfig["dashboardRoles"]
+      );
+    }
+    final[user] = userObj;
+    return final;
+  }, {});
+  //update users
+  Object.keys(newUserObj).map(async user => {
+    var userResponses = await client.security.putUser({
+      username: user,
+      refresh: "wait_for",
+      body: { ...newUserObj[user] }
+    });
+  });
+};
 const deleteUser = async username => {
   const client = createSuperUserClient();
 
@@ -331,7 +357,7 @@ const generateNewUserLink = async newUser => {
   );
   await redis.expireat(
     cacheConfig["newUserDashboardRoles"] + newUser.email,
-    parseInt(+new Date() / 1000) + 86400
+    parseInt(+new Date() / 1000) + 7 * 86400
   );
   //store admin role
   await redis.set(
@@ -368,6 +394,9 @@ const updateUser = async (newRoles, username, email, name, isAdmin) => {
 };
 export const resolvers = {
   Query: {
+    removeDashbaordFromUsers: async (_, { name }) => {
+      return await removeDashbaordFromUsers(name);
+    },
     allowResetPassword: async (_, { username }) => {
       return await allowResetPassword(username);
     },
