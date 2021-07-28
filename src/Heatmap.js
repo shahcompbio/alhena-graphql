@@ -464,6 +464,7 @@ async function getBinsForID(analysis, id) {
     .size(50000)
     .filter("exists", "copy")
     .filter("term", "cell_id", id)
+    .filter("range", "state", { gte: 0 })
     .build();
 
   const results = await client.search({
