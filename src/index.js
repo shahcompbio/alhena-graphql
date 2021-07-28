@@ -22,7 +22,7 @@ const baseSchema = gql`
     _blank: String
   }
 `;
-console.log("hello");
+
 const schema = makeExecutableSchema({
   typeDefs: [
     baseSchema,
