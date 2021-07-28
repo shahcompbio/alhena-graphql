@@ -332,8 +332,9 @@ const generateNewUserLink = async newUser => {
   var homePath = process.env.SERVER_NAME
     ? "https://" +
       process.env.SERVER_NAME +
-      "/" +
-      process.env.REACT_APP_BASENAME +
+      (process.env.REACT_APP_BASENAME !== ""
+        ? "/" + process.env.REACT_APP_BASENAME
+        : "") +
       "/NewAccount"
     : "http://localhost:3001/NewAccount";
 
