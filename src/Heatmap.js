@@ -193,6 +193,7 @@ export const resolvers = {
       const segsQuery = bodybuilder()
         .size(50000)
         .filter("terms", "cell_id", ids)
+        .filter("range", "state", { gte: 0 })
         .build();
 
       const segResults = await client.search({
@@ -200,9 +201,10 @@ export const resolvers = {
         body: segsQuery
       });
 
+      const minBP = Math.floor(0.1 * bpRatio);
       const allSegs = segResults.body.hits.hits
         .map(seg => seg["_source"])
-        .filter(seg => Math.floor((seg.end - seg.start + 1) / bpRatio));
+        .filter(seg => seg.end - seg.start + 1 > minBP);
 
       return cells.map(cell => ({
         ...cell,
@@ -467,6 +469,7 @@ async function getBinsForID(analysis, id) {
     .size(50000)
     .filter("exists", "copy")
     .filter("term", "cell_id", id)
+    .filter("range", "state", { gte: 0 })
     .build();
 
   const results = await client.search({
