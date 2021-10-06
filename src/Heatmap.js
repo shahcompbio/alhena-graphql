@@ -20,7 +20,11 @@ export const schema = gql`
     ): [SegRow]
     bins(analysis: String!, id: String!): [Bin]
     analysisStats(analysis: String, indices: [Int!]!): AnalysisStats!
-    heatmapOrder(analysis: String, quality: String!): [HeatmapOrder]
+    heatmapOrder(
+      analysis: String
+      quality: String!
+      params: [InputParams]
+    ): [HeatmapOrder]
     categoriesStats(analysis: String, dataFilters: [String]): [CategoryStats]
     numericalDataFilters(
       analysis: String
@@ -148,8 +152,10 @@ export const resolvers = {
         cellStats: cellStats
       };
     },
-    async heatmapOrder(_, { analysis, quality }) {
-      return await getAllHeatmapOrder(analysis, quality);
+    async heatmapOrder(_, { analysis, quality, params }) {
+      return params && params.length > 0
+        ? await await getHeatmapOrderByParam(analysis, params, quality)
+        : await getAllHeatmapOrder(analysis, quality);
     },
 
     async segs(_, { analysis, indices, quality, heatmapWidth }) {
@@ -210,13 +216,6 @@ export const resolvers = {
         ...cell,
         segs: allSegs.filter(seg => seg["cell_id"] === cell["cell_id"])
       }));
-
-      // return results.body.hits.hits.map((id) => ({
-      //   ...id["_source"],
-      //   analysis,
-      //   width: heatmapWidth,
-      //   chrom: chrom,
-      // }));
     },
     async heatmapOrderFromParameter(_, { analysis, params, quality }) {
       const results = await getHeatmapOrderByParam(analysis, params, quality);
@@ -277,19 +276,6 @@ export const resolvers = {
     name: root => root.cell_id,
     index: root => root.order,
     segs: root => root.segs
-    // segs: async root => {
-    //   const analysis = root.analysis;
-    //   const id = root.cell_id;
-    //   const width = root.width;
-    //   const totalBP = root.chrom.reduce(
-    //     (sum, chrom) => sum + chrom.end - chrom.start + 1,
-    //     0
-    //   );
-
-    //   const bpRatio = Math.ceil(totalBP / width);
-
-    //   return await getSegsForID(analysis, id, bpRatio);
-    // }
   },
   Seg: {
     chromosome: root => root.chrom_number,
@@ -329,9 +315,11 @@ async function getDataFilters(analysis, quality, params) {
       param["param"] === "experimental_condition" &&
       param["value"].indexOf(",") !== -1
     ) {
-      localMaxMinQuery.addFilter("terms", param["param"], [
-        ...param["value"].split(",")
-      ]);
+      localMaxMinQuery.addFilter(
+        "terms",
+        param["param"],
+        param["value"].split(",")
+      );
     } else {
       localMaxMinQuery.addFilter("term", param["param"], param["value"]);
     }
@@ -376,7 +364,7 @@ async function getHeatmapOrderByParam(analysis, params, quality) {
       param["param"] === "experimental_condition" &&
       param["value"].indexOf(",") !== -1
     ) {
-      query.addFilter("terms", param["param"], [param["value"].split(",")]);
+      query.addFilter("terms", param["param"], param["value"].split(","));
     } else {
       query.addFilter("term", param["param"], param["value"]);
     }
@@ -399,7 +387,7 @@ async function getHeatmapOrderByParam(analysis, params, quality) {
 async function getAllHeatmapOrder(analysis, quality) {
   const client = createSuperUserClient();
   const query = bodybuilder()
-    .size(50000)
+    .size(15)
     .sort("order", "asc")
     .filter("exists", "order")
     .filter("range", "quality", { gte: parseFloat(quality) })

@@ -207,7 +207,7 @@ const createNewUser = async user => {
         }
       }
     });
-
+    console.log(response.body);
     return response.body;
   }
 };
