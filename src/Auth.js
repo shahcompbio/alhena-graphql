@@ -34,6 +34,8 @@ export const schema = gql`
     changePassword(username: String!, newPassword: String!): Acknowledgement
     newUserLink(newUser: NewUserLink!): NewUserLinkResponse
     doesUserExist(email: String!, username: String): DoesUserExistResponse
+    getLastSettingsTab(user: ApiUser!): Int
+    setLastSettingsTab(user: ApiUser!, index: Int): Boolean
   }
   input NewUserLink {
     email: String!
@@ -98,6 +100,7 @@ export const schema = gql`
     authKeyID: String
     role: [String]
     isAdmin: Int
+    lastSettingsTab: Int
   }
 `;
 
@@ -207,7 +210,7 @@ const createNewUser = async user => {
         }
       }
     });
-    console.log(response.body);
+
     return response.body;
   }
 };
@@ -231,6 +234,10 @@ const getUsers = async auth => {
       : [];
 
   return users;
+};
+const getLastSettingsTab = async user => {
+  const index = await redis.get(cacheConfig["lastSettingsTab"] + user.uid);
+  return index === null ? 0 : index;
 };
 const incompleteLogin = statusCode => {
   return { statusCode: statusCode, authKeyID: null, role: [] };
@@ -259,6 +266,7 @@ const login = async user => {
     });
 
     if (result.statusCode === 200) {
+      const lastSettingsTab = await getLastSettingsTab(user);
       //if keys invalidate
       var oldKey;
       if (result.body.api_keys.length !== 0) {
@@ -288,11 +296,13 @@ const login = async user => {
             user.uid + ":" + newKey.body.id,
             parseInt(+new Date() / 1000) + 86400
           );
+
           return {
             statusCode: newKey.statusCode,
             authKeyID: newKey.body ? newKey.body.id : null,
             role: roleMapping.body[user.uid].roles,
-            isAdmin: roleMapping.body[user.uid].metadata.isAdmin
+            isAdmin: roleMapping.body[user.uid].metadata.isAdmin,
+            lastSettingsTab: lastSettingsTab
           };
         } else {
           return incompleteLogin(newKey.statusCode);
@@ -372,6 +382,9 @@ const generateNewUserLink = async newUser => {
 
   return finalUrl;
 };
+const setLastSettingsTab = async (username, tabIndex) => {
+  await redis.set(cacheConfig["lastSettingsTab"] + username, tabIndex);
+};
 const updateUser = async (newRoles, username, email, name, isAdmin) => {
   const client = createSuperUserClient();
 
@@ -413,6 +426,9 @@ export const resolvers = {
     doesUserExist: async (_, { email, username }) => {
       return await doesUserExist(email, username);
     },
+    getLastSettingsTab: async ({ username }) => {
+      return await getLastSettingsTab(username);
+    },
     getUsers: async (_, { auth }) => {
       return await getUsers(auth);
     },
@@ -432,6 +448,9 @@ export const resolvers = {
     verifyNewUserUri: async (_, { key }) => {
       const email = await verifyUriKey(key);
       return { email: email };
+    },
+    setLastSettingsTab: async (_, { user, index }) => {
+      return await setLastSettingsTab(user.uid, index);
     },
     updateUser: async (_, { newRoles, username, email, name, isAdmin }) => {
       return await updateUser(newRoles, username, email, name, isAdmin);
@@ -481,6 +500,7 @@ export const resolvers = {
     statusCode: root => root.statusCode,
     authKeyID: root => root.authKeyID,
     role: root => root.role,
-    isAdmin: root => (root.role[0] === "superuser" ? true : root.isAdmin)
+    isAdmin: root => (root.role[0] === "superuser" ? true : root.isAdmin),
+    lastSettingsTab: root => root.lastSettingsTab
   }
 };

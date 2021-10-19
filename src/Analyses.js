@@ -11,12 +11,12 @@ import cacheConfig from "./api/cacheConfigs.js";
 import { createSuperUserClient } from "./utils.js";
 import { getApiId, getIndicesByDashboard } from "./Dashboards";
 
-const FIELD_HIERARCHY = ["project", "sample_id", "library_id", "jira_id"];
+const FIELD_HIERARCHY = ["project", "sample_id", "library_id", "dashboard_id"];
 const FIELD_NAMES = {
   project: "Project",
   sample_id: "Sample ID",
   library_id: "Library",
-  jira_id: "Analysis ID"
+  dashboard_id: "Dashboard ID"
 };
 
 export const schema = gql`
@@ -42,7 +42,7 @@ export const schema = gql`
     project: String
     sample_id: String!
     library_id: String!
-    jira_id: String!
+    dashboard_id: String!
   }
   type AnalysesTree {
     source: String
@@ -127,7 +127,9 @@ const getAnalyses = async (filters, auth, dashboardName) => {
 
     const allowedAnalyses = data["body"]["hits"]["hits"]
       .map(hit => hit["_source"])
-      .filter(analysis => allowedIndicesObj.hasOwnProperty(analysis.jira_id))
+      .filter(analysis =>
+        allowedIndicesObj.hasOwnProperty(analysis.dashboard_id)
+      )
       .map(analysis => {
         analysis["project"] = dashboardName;
         return analysis;
@@ -168,7 +170,7 @@ export const resolvers = {
     project: root => root.project,
     sample_id: root => root.sample_id,
     library_id: root => root.library_id,
-    jira_id: root => root.jira_id
+    dashboard_id: root => root.dashboard_id
   },
   AnalysesTree: {
     source: () => null,
@@ -209,7 +211,7 @@ export const resolvers = {
         }
       );
       const source = data["body"]["hits"]["hits"].map(hit => hit["_source"]);
-      return source.filter(hit => hit["jira_id"] === analysis)[0];
+      return source.filter(hit => hit["dashboard_id"] === analysis)[0];
     },
     analyses: async (_, { filters, auth, dashboardName }) => {
       const data = await getAnalyses(filters, auth, dashboardName);

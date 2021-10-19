@@ -171,5 +171,5 @@ export const configConsts = [
 export const defaultDashboardColumns = [
   { type: "sample_id", label: "Sample ID" },
   { type: "library_id", label: "Library ID" },
-  { type: "jira_id", label: "Jira Ticket" }
+  { type: "dashboard_id", label: "Dashboard ID" }
 ];

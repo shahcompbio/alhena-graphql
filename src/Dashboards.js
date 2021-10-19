@@ -4,6 +4,7 @@ var crypto = require("crypto");
 
 import client from "./api/client";
 import authClient from "./api/authClient";
+import bodybuilder from "bodybuilder";
 
 import { createSuperUserClient, getRedisApiKey } from "./utils.js";
 import cacheConfig from "./api/cacheConfigs.js";
@@ -15,12 +16,16 @@ export const schema = gql`
   extend type Query {
     getDashboardsByUser(auth: ApiUser!): UserDashboard
 
+    getAllSettings: [DashboardColumns!]
     getAvailableDashboardColumns: [DashboardColumns!]
     setDashboardColumnsByDashboard(
       dashboard: String!
       columns: [String!]
     ): CreationAcknowledgement
     getDashboardColumnsByDashboard(dashboard: String!): [DashboardColumns!]
+    updateDashboardColumns(
+      columns: [DashboardColumnsInput]
+    ): UpdateAcknowledgement
 
     getAllDashboards(auth: ApiUser!): [Dashboard]
     getAllIndices: [Index!]
@@ -39,6 +44,10 @@ export const schema = gql`
   type DeleteAcknowledgment {
     allDeleted: Boolean
   }
+  input DashboardColumnsInput {
+    id: String
+    name: String
+  }
   input DashboardInput {
     name: String!
     indices: [String!]
@@ -49,6 +58,7 @@ export const schema = gql`
   type Index {
     name: String
   }
+
   type Dashboard {
     name: String!
     count: Int
@@ -57,6 +67,7 @@ export const schema = gql`
     type: String
     label: String
   }
+
   type UserDashboard {
     dashboards: [Dashboard]!
     defaultDashboard: String
@@ -66,15 +77,35 @@ var collator = new Intl.Collator(undefined, {
   numeric: true,
   sensitivity: "base"
 });
+const getAllSettings = async () => {
+  const baseQuery = bodybuilder().size(1000);
+
+  const client = createSuperUserClient();
+
+  const data = await client.search(
+    {
+      index: "metadata_labels",
+      body: baseQuery.build()
+    },
+    {
+      ignore: [401]
+    }
+  );
+  return data["body"]["hits"]["hits"].map(d => ({
+    type: d["_source"]["id"],
+    label: d["_source"]["name"]
+  }));
+};
 const getAvailableDashboardColumns = () => {
-  return defaultDashboardColumns;
+  return getAllSettings();
 };
 const getDashboardColumnsByDashboard = async name => {
   const columns = await redis.get(cacheConfig["dahboardColumns"] + name);
   if (columns === null) {
     return defaultDashboardColumns;
   } else {
-    const columnConstants = defaultDashboardColumns.reduce((final, column) => {
+    const allFields = getAllSettings();
+    const columnConstants = allFields.reduce((final, column) => {
       final[column["type"]] = column["label"];
       return final;
     }, {});
@@ -284,7 +315,9 @@ const getIndices = async () => {
     size: 5000
   });
 
-  const indexNames = response.body.hits.hits.map(hit => hit._source.jira_id);
+  const indexNames = response.body.hits.hits.map(
+    hit => hit._source.dashboard_id
+  );
   return [...new Set(indexNames)].sort(collator.compare);
 };
 const getApiId = async uid => {
@@ -301,7 +334,38 @@ const getApiId = async uid => {
     )[0].id;
   }
 };
+const updateDashboardColumns = async columns => {
+  const client = createSuperUserClient();
+  const body = columns.flatMap(doc => [
+    { index: { _index: "metadata_labels", _type: "_doc", _id: doc["id"] } },
+    { ...doc }
+  ]);
+  const { body: bulkResponse } = await client.bulk({
+    refresh: true,
+    body: body
+  });
 
+  if (bulkResponse.errors) {
+    const erroredDocuments = [];
+    bulkResponse.items.forEach((action, i) => {
+      const operation = Object.keys(action)[0];
+      if (action[operation].error) {
+        erroredDocuments.push({
+          // If the status is 429 it means that you can retry the document,
+          // otherwise it's very likely a mapping error, and you should
+          // fix the document before to try it again.
+          status: action[operation].status,
+          error: action[operation].error,
+          operation: body[i * 2],
+          document: body[i * 2 + 1]
+        });
+      }
+    });
+    return { created: false };
+  } else {
+    return { created: true };
+  }
+};
 const getKey = async key => await redis.get(key);
 
 export const resolvers = {
@@ -327,11 +391,17 @@ export const resolvers = {
     label: root => root.label
   },
   Query: {
+    async getAllSettings() {
+      return await getAllSettings();
+    },
     async getAllUsers() {
       return await getAllUsers();
     },
     async getDashboardUsers(_, { name }) {
       return await getAllDashboardUsers(name);
+    },
+    async updateDashboardColumns(_, { columns }) {
+      return await updateDashboardColumns(columns);
     },
     async updateDashboardByName(_, { dashboard }) {
       return await updateDashboard(

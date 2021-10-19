@@ -387,7 +387,7 @@ async function getHeatmapOrderByParam(analysis, params, quality) {
 async function getAllHeatmapOrder(analysis, quality) {
   const client = createSuperUserClient();
   const query = bodybuilder()
-    .size(15)
+    .size(50000)
     .sort("order", "asc")
     .filter("exists", "order")
     .filter("range", "quality", { gte: parseFloat(quality) })
