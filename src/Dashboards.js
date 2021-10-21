@@ -77,7 +77,7 @@ var collator = new Intl.Collator(undefined, {
   numeric: true,
   sensitivity: "base"
 });
-const getAllSettings = async () => {
+export const getAllSettings = async () => {
   const baseQuery = bodybuilder().size(1000);
 
   const client = createSuperUserClient();
@@ -96,21 +96,27 @@ const getAllSettings = async () => {
     label: d["_source"]["name"]
   }));
 };
-const getAvailableDashboardColumns = () => {
-  return getAllSettings();
+const getAvailableDashboardColumns = async () => {
+  return await getAllSettings();
 };
-const getDashboardColumnsByDashboard = async name => {
+export const getDashboardColumnsByDashboard = async name => {
   const columns = await redis.get(cacheConfig["dahboardColumns"] + name);
   if (columns === null) {
     return defaultDashboardColumns;
   } else {
-    const allFields = getAllSettings();
+    const allFields = await getAllSettings();
     const columnConstants = allFields.reduce((final, column) => {
       final[column["type"]] = column["label"];
       return final;
     }, {});
+    //jira /dashboard id artifact
+    const colSplit = columns.split(",");
 
-    const columnList = columns.split(",");
+    const jiraIndex = colSplit.indexOf("jira_id");
+    const columnList =
+      jiraIndex !== -1 && colSplit.indexOf("dashboard_id") === -1
+        ? [...colSplit.filter((d, i) => i !== jiraIndex), "dashboard_id"]
+        : colSplit;
     return columnList.map(column => ({
       type: column,
       label: columnConstants[column]
@@ -315,11 +321,12 @@ const getIndices = async () => {
     size: 5000
   });
 
-  const indexNames = response.body.hits.hits.map(
-    hit => hit._source.dashboard_id
+  const indexNames = response.body.hits.hits.map(hit =>
+    hit._source.dashboard_id ? hit._source.dashboard_id : hit._source.jira_id
   );
   return [...new Set(indexNames)].sort(collator.compare);
 };
+
 const getApiId = async uid => {
   const apiKeyResult = await authClient(
     adminUser,

@@ -9,7 +9,12 @@ import _ from "lodash";
 
 import cacheConfig from "./api/cacheConfigs.js";
 import { createSuperUserClient } from "./utils.js";
-import { getApiId, getIndicesByDashboard } from "./Dashboards";
+import {
+  getApiId,
+  getIndicesByDashboard,
+  getDashboardColumnsByDashboard,
+  getAllSettings
+} from "./Dashboards";
 
 const FIELD_HIERARCHY = ["project", "sample_id", "library_id", "dashboard_id"];
 const FIELD_NAMES = {
@@ -22,7 +27,7 @@ const FIELD_NAMES = {
 export const schema = gql`
   extend type Query {
     analyses(filters: [Term]!, auth: ApiUser!, dashboardName: String!): Analyses
-    analysisMetadata(analysis: String!): AnalysisRow
+    analysisMetadata(analysis: String!, project: String): AnalysisRow
   }
   input Term {
     label: String!
@@ -36,6 +41,14 @@ export const schema = gql`
     analysesList: [AnalysisGroup!]
     analysesTree: AnalysesTree
     analysesRows: [AnalysisRow]
+    tableData: [TableData]
+  }
+  type TableRows {
+    value: String
+    type: String
+  }
+  type TableData {
+    rows: [TableRows!]
   }
 
   type AnalysisRow {
@@ -43,6 +56,7 @@ export const schema = gql`
     sample_id: String!
     library_id: String!
     dashboard_id: String!
+    metadata: [TableRows]
   }
   type AnalysesTree {
     source: String
@@ -64,7 +78,7 @@ export const schema = gql`
   type AnalysisGroup {
     label: String!
     type: String!
-    values: [String!]
+    values: [String]
   }
 
   type Stat {
@@ -107,6 +121,7 @@ const getAnalyses = async (filters, auth, dashboardName) => {
           )
           .build();
   const authKey = await redis.get(auth.uid + ":" + auth.authKeyID);
+
   const data = await client(authKey, auth.authKeyID).search(
     {
       index: "analyses",
@@ -120,6 +135,7 @@ const getAnalyses = async (filters, auth, dashboardName) => {
     return null;
   } else {
     const allowedIndices = await getIndicesByDashboard(dashboardName);
+    //const cellCount = await getIndices
     const allowedIndicesObj = allowedIndices.reduce((final, index) => {
       final[index] = true;
       return final;
@@ -128,7 +144,9 @@ const getAnalyses = async (filters, auth, dashboardName) => {
     const allowedAnalyses = data["body"]["hits"]["hits"]
       .map(hit => hit["_source"])
       .filter(analysis =>
-        allowedIndicesObj.hasOwnProperty(analysis.dashboard_id)
+        allowedIndicesObj.hasOwnProperty(
+          analysis.dashboard_id ? analysis.dashboard_id : analysis.jira_id
+        )
       )
       .map(analysis => {
         analysis["project"] = dashboardName;
@@ -155,9 +173,16 @@ export const resolvers = {
     analysesStats: root => root.stats,
     analysesList: root => root.list,
     analysesTree: root => root.tree,
-    analysesRows: root => root.tree
+    analysesRows: root => root.tree,
+    tableData: root => root.tree
   },
-
+  TableData: {
+    rows: root => Object.keys(root).map(d => ({ type: d, value: root[d] }))
+  },
+  TableRows: {
+    type: root => root.type,
+    value: root => root.value
+  },
   ParentType: {
     source: root => root.source,
     children: root => filterChildren(root, root.hierarchyLevel)
@@ -170,7 +195,9 @@ export const resolvers = {
     project: root => root.project,
     sample_id: root => root.sample_id,
     library_id: root => root.library_id,
-    dashboard_id: root => root.dashboard_id
+    dashboard_id: root =>
+      root.dashboard_id ? root.dashboard_id : root.jira_id,
+    metadata: root => root
   },
   AnalysesTree: {
     source: () => null,
@@ -196,7 +223,7 @@ export const resolvers = {
     value: root => root.value
   },
   Query: {
-    analysisMetadata: async (_, { analysis }) => {
+    analysisMetadata: async (_, { analysis, project }) => {
       const baseQuery = bodybuilder().size(10000);
 
       const client = createSuperUserClient();
@@ -210,23 +237,40 @@ export const resolvers = {
           ignore: [401]
         }
       );
-      const source = data["body"]["hits"]["hits"].map(hit => hit["_source"]);
-      return source.filter(hit => hit["dashboard_id"] === analysis)[0];
+      const dashboardColumns = await getDashboardColumnsByDashboard(project);
+      const dashboardColumnMapping = dashboardColumns.reduce((final, d) => {
+        final[d.type] = d.label;
+        return final;
+      }, {});
+      console.log(dashboardColumnMapping);
+      console.log(dashboardColumns);
+      const dahboardColumnTypes = dashboardColumns.map(d => d.type).join(" ");
+
+      const source = data["body"]["hits"]["hits"]
+        .map(hit => hit["_source"])
+        .filter(hit => hit["dashboard_id"] === analysis)[0];
+      const sourceKeys = Object.keys(source);
+
+      return sourceKeys
+        .filter(d => dahboardColumnTypes.indexOf(d) !== -1)
+        .map(d => ({ type: dashboardColumnMapping[d], value: source[d] }));
     },
     analyses: async (_, { filters, auth, dashboardName }) => {
       const data = await getAnalyses(filters, auth, dashboardName);
+
       if (data) {
+        const allColumns = await getAllSettings();
         const defaultProjectView = await redis.get(
           cacheConfig["isSpiderSelectionDefault"] + auth.uid
         );
-        const counts = FIELD_HIERARCHY.map(field => {
-          const values = getUniqueValuesInKey(data, field);
+        const counts = allColumns.map(field => {
+          const values = getUniqueValuesInKey(data, field.type);
 
           return {
-            label: FIELD_NAMES[field],
+            label: field.label,
             value: values.length,
-            type: field,
-            values: values
+            type: field.type,
+            values: values[0] === undefined ? [] : values
           };
         });
 
