@@ -154,7 +154,6 @@ const getAnalyses = async (filters, auth, dashboardName) => {
         analysis["project"] = dashboardName;
         return analysis;
       });
-    console.log(allowedAnalyses);
     return [...allowedAnalyses];
   }
 };
