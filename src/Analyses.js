@@ -42,6 +42,7 @@ export const schema = gql`
     analysesTree: AnalysesTree
     analysesRows: [AnalysisRow]
     tableData: [TableData]
+    recentAnalysis: [AnalysisRow]
   }
   type TableRows {
     value: String
@@ -56,6 +57,7 @@ export const schema = gql`
     sample_id: String!
     library_id: String!
     dashboard_id: String!
+    timestamp: String
     metadata: [TableRows]
   }
   type AnalysesTree {
@@ -135,7 +137,7 @@ const getAnalyses = async (filters, auth, dashboardName) => {
     return null;
   } else {
     const allowedIndices = await getIndicesByDashboard(dashboardName);
-    //const cellCount = await getIndices
+
     const allowedIndicesObj = allowedIndices.reduce((final, index) => {
       final[index] = true;
       return final;
@@ -152,7 +154,7 @@ const getAnalyses = async (filters, auth, dashboardName) => {
         analysis["project"] = dashboardName;
         return analysis;
       });
-
+    console.log(allowedAnalyses);
     return [...allowedAnalyses];
   }
 };
@@ -174,7 +176,8 @@ export const resolvers = {
     analysesList: root => root.list,
     analysesTree: root => root.tree,
     analysesRows: root => root.tree,
-    tableData: root => root.tree
+    tableData: root => root.tree,
+    recentAnalysis: root => root.recentAnalysis
   },
   TableData: {
     rows: root => Object.keys(root).map(d => ({ type: d, value: root[d] }))
@@ -197,6 +200,7 @@ export const resolvers = {
     library_id: root => root.library_id,
     dashboard_id: root =>
       root.dashboard_id ? root.dashboard_id : root.jira_id,
+    timestamp: root => root.timestamp,
     metadata: root => root
   },
   AnalysesTree: {
@@ -242,8 +246,7 @@ export const resolvers = {
         final[d.type] = d.label;
         return final;
       }, {});
-      console.log(dashboardColumnMapping);
-      console.log(dashboardColumns);
+
       const dahboardColumnTypes = dashboardColumns.map(d => d.type).join(" ");
 
       const source = data["body"]["hits"]["hits"]
@@ -257,30 +260,34 @@ export const resolvers = {
     },
     analyses: async (_, { filters, auth, dashboardName }) => {
       const data = await getAnalyses(filters, auth, dashboardName);
-
       if (data) {
         const allColumns = await getAllSettings();
         const defaultProjectView = await redis.get(
           cacheConfig["isSpiderSelectionDefault"] + auth.uid
         );
-        const counts = allColumns.map(field => {
-          const values = getUniqueValuesInKey(data, field.type);
-
-          return {
-            label: field.label,
-            value: values.length,
-            type: field.type,
-            values: values[0] === undefined ? [] : values
-          };
-        });
-
+        const counts = [
+          ...allColumns,
+          { label: "timestamp", type: "timestamp" }
+        ]
+          .map(field => {
+            const values = getUniqueValuesInKey(data, field.type);
+            return {
+              label: field.label,
+              value: values.length,
+              type: field.type,
+              values: values[0] === undefined ? [] : values
+            };
+          })
+          .filter(field => field.values.length !== 0);
+        const recentAnalysis = data.filter(d => d.timestamp);
         return {
           error: false,
           defaultProjectView:
             defaultProjectView !== null ? defaultProjectView : 0,
           tree: data,
           list: counts,
-          stats: counts
+          stats: counts,
+          recentAnalysis: [...recentAnalysis]
         };
       } else {
         return {
@@ -288,7 +295,8 @@ export const resolvers = {
           defaultProjectView: 0,
           tree: [],
           list: [],
-          stats: []
+          stats: [],
+          recentAnalysis: []
         };
       }
     }

@@ -148,7 +148,8 @@ const getAllUsers = async () => {
     "logstash_system",
     "beats_system",
     "apm_system",
-    "remote_monitoring_user"
+    "remote_monitoring_user",
+    "kibana_system"
   ];
 
   const allUsers = await client.security.getUser({});
@@ -164,11 +165,13 @@ const getAllDashboardUsers = async name => {
   const client = createSuperUserClient();
 
   const allUsers = await client.security.getUser({});
+
   return Object.keys(allUsers.body).reduce((final, user) => {
     const userObj = allUsers.body[user];
-
-    if (userObj.roles.indexOf(name + cacheConfig["dashboardRoles"]) != -1) {
-      final = [...final, allUsers.body[user]];
+    if (userObj["full_name"] !== null) {
+      if (userObj.roles.indexOf(name + cacheConfig["dashboardRoles"]) != -1) {
+        final = [...final, allUsers.body[user]];
+      }
     }
     return final;
   }, []);
