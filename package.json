@@ -7,7 +7,7 @@
   "dependencies": {
     "@babel/polyfill": "^7.4.0",
     "@elastic/elasticsearch": "^7.0.0-rc.2",
-    "apollo-server": "^2.4.8",
+    "apollo-server": "^2.25.3",
     "bodybuilder": "^2.2.20",
     "crypto": "^1.0.1",
     "dotenv": "^8.2.0",
