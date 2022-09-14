@@ -6,6 +6,7 @@ import client from "./api/client";
 import authClient from "./api/authClient";
 import bodybuilder from "bodybuilder";
 
+import { isAdmin } from "./Auth.js";
 import { createSuperUserClient, getRedisApiKey } from "./utils.js";
 import cacheConfig from "./api/cacheConfigs.js";
 import { defaultDashboardColumns } from "./config.js";
@@ -28,6 +29,8 @@ export const schema = gql`
     ): UpdateAcknowledgement
 
     getAllDashboards(auth: ApiUser!): [Dashboard]
+    getAllDashboardsWithAnalysis(auth: ApiUser!): [DashboardChecker]
+
     getAllIndices: [Index!]
     getIndicesByDashboard(dashboard: String!): [Index]
 
@@ -58,7 +61,10 @@ export const schema = gql`
   type Index {
     name: String
   }
-
+  type DashboardChecker {
+    name: String!
+    indices: [String]
+  }
   type Dashboard {
     name: String!
     count: Int
@@ -75,7 +81,7 @@ export const schema = gql`
 `;
 var collator = new Intl.Collator(undefined, {
   numeric: true,
-  sensitivity: "base"
+  sensitivity: "base",
 });
 export const getAllSettings = async () => {
   const baseQuery = bodybuilder().size(1000);
@@ -85,22 +91,23 @@ export const getAllSettings = async () => {
   const data = await client.search(
     {
       index: "metadata_labels",
-      body: baseQuery.build()
+      body: baseQuery.build(),
     },
     {
-      ignore: [401]
+      ignore: [401],
     }
   );
-  return data["body"]["hits"]["hits"].map(d => ({
+  return data["body"]["hits"]["hits"].map((d) => ({
     type: d["_source"]["id"],
-    label: d["_source"]["name"]
+    label: d["_source"]["name"],
   }));
 };
 const getAvailableDashboardColumns = async () => {
   return await getAllSettings();
 };
-export const getDashboardColumnsByDashboard = async name => {
+export const getDashboardColumnsByDashboard = async (name) => {
   const columns = await redis.get(cacheConfig["dahboardColumns"] + name);
+
   if (columns === null) {
     return defaultDashboardColumns;
   } else {
@@ -117,9 +124,9 @@ export const getDashboardColumnsByDashboard = async name => {
       jiraIndex !== -1 && colSplit.indexOf("dashboard_id") === -1
         ? [...colSplit.filter((d, i) => i !== jiraIndex), "dashboard_id"]
         : colSplit;
-    return columnList.map(column => ({
+    return columnList.map((column) => ({
       type: column,
-      label: columnConstants[column]
+      label: columnConstants[column],
     }));
   }
 };
@@ -128,15 +135,15 @@ const setDashboardColumns = async (name, selectedDashboardColumns) => {
   const red = await redis.set(cacheConfig["dahboardColumns"] + name, join);
   return true;
 };
-const getAllDashboards = async client => {
+const getAllDashboards = async (client) => {
   var response = await client.security.getRole({});
 
   return Object.keys(response.body)
-    .filter(role => role.indexOf(cacheConfig["dashboardRoles"]) !== -1)
-    .map(role => {
+    .filter((role) => role.indexOf(cacheConfig["dashboardRoles"]) !== -1)
+    .map((role) => {
       return {
         name: role.split("_")[0],
-        count: response.body[role].indices[0].names.length - 1
+        count: response.body[role].indices[0].names.length - 1,
       };
     });
 };
@@ -149,7 +156,7 @@ const getAllUsers = async () => {
     "beats_system",
     "apm_system",
     "remote_monitoring_user",
-    "kibana_system"
+    "kibana_system",
   ];
 
   const allUsers = await client.security.getUser({});
@@ -161,7 +168,7 @@ const getAllUsers = async () => {
     return final;
   }, []);
 };
-const getAllDashboardUsers = async name => {
+const getAllDashboardUsers = async (name) => {
   const client = createSuperUserClient();
 
   const allUsers = await client.security.getUser({});
@@ -177,7 +184,7 @@ const getAllDashboardUsers = async name => {
   }, []);
 };
 
-const deleteDashboard = async name => {
+const deleteDashboard = async (name) => {
   const client = createSuperUserClient();
   const allUsersLastProjKeys = await redis.keys(
     cacheConfig["lastSelectedProject"] + "*"
@@ -191,14 +198,14 @@ const deleteDashboard = async name => {
   }, []);
 
   if (projIndices.length > 0) {
-    projIndices.map(index => {
+    projIndices.map((index) => {
       redis.del(allUsersLastProjKeys[index]);
     });
   }
   await deletedUsersFromDashboard(name);
   const deleteRoleResponse = await client.security.deleteRole({
     name: name + cacheConfig["dashboardRoles"],
-    refresh: "wait_for"
+    refresh: "wait_for",
   });
 
   return deleteRoleResponse;
@@ -217,22 +224,29 @@ const updateDashboard = async (name, indices, columns, users, deletedUsers) => {
   return { created: created["created"] === false };
 };
 
-const getUserRoles = async username => {
+const getUserRoles = async (username) => {
   const client = createSuperUserClient();
   var response = await client.security.getUser({ username: username });
   return response.body[username].roles;
 };
-
-export const getIndicesByDashboard = async name => {
+const getAllDashboardsWithAnalysis = async (client) => {
+  const allDashboards = await getAllDashboards(client);
+  return allDashboards.map(async (dashboard) => {
+    const name = dashboard["name"];
+    const indices = await getIndicesByDashboard(name);
+    return { name: name, indices: indices };
+  });
+};
+export const getIndicesByDashboard = async (name) => {
   const client = createSuperUserClient();
   const roleName = name + cacheConfig["dashboardRoles"];
 
   var analyses = await client.security.getRole({
-    name: roleName
+    name: roleName,
   });
 
   return analyses.body[roleName].indices[0].names.filter(
-    hit => hit !== "analyses"
+    (hit) => hit !== "analyses"
   );
 };
 const createDashboard = async (name, indices, columns, users, deletedUsers) => {
@@ -249,14 +263,14 @@ const createDashboard = async (name, indices, columns, users, deletedUsers) => {
       indices: [
         {
           names: ["analyses", ...indices],
-          privileges: ["read"]
-        }
-      ]
-    }
+          privileges: ["read"],
+        },
+      ],
+    },
   });
   return dashboardRoles.body.role;
 };
-const deletedUsersFromDashboard = async name => {
+const deletedUsersFromDashboard = async (name) => {
   const client = createSuperUserClient();
   var userContent = await client.security.getUser({});
 
@@ -265,7 +279,7 @@ const deletedUsersFromDashboard = async name => {
     //if the user has this dashboard delete
     if (userObj["roles"].indexOf(name + cacheConfig["dashboardRoles"]) !== -1) {
       userObj["roles"] = userObj["roles"].filter(
-        role => role !== name + cacheConfig["dashboardRoles"]
+        (role) => role !== name + cacheConfig["dashboardRoles"]
       );
     }
     final[user] = userObj;
@@ -273,11 +287,11 @@ const deletedUsersFromDashboard = async name => {
   }, {});
 
   //update users
-  Object.keys(newUserObj).map(async user => {
+  Object.keys(newUserObj).map(async (user) => {
     var userResponses = await client.security.putUser({
       username: user,
       refresh: "wait_for",
-      body: { ...newUserObj[user] }
+      body: { ...newUserObj[user] },
     });
   });
   return;
@@ -288,14 +302,14 @@ const appendUsersToDashboard = async (name, users, deletedUsers) => {
     deletedUsers.length === 0 ? [...users] : [...users, ...deletedUsers];
 
   var userContent = await client.security.getUser({
-    username: [...allUsers]
+    username: [...allUsers],
   });
 
   const newUserObj = Object.keys(userContent["body"]).reduce((final, user) => {
     var userObj = userContent["body"][user];
     if (deletedUsers.indexOf(user) !== -1) {
       userObj["roles"] = userObj["roles"].filter(
-        role => role !== name + cacheConfig["dashboardRoles"]
+        (role) => role !== name + cacheConfig["dashboardRoles"]
       );
     } else {
       userObj["roles"] =
@@ -307,11 +321,11 @@ const appendUsersToDashboard = async (name, users, deletedUsers) => {
     return final;
   }, {});
 
-  Object.keys(newUserObj).map(async user => {
+  Object.keys(newUserObj).map(async (user) => {
     var userResponses = await client.security.putUser({
       username: user,
       refresh: "wait_for",
-      body: { ...newUserObj[user] }
+      body: { ...newUserObj[user] },
     });
   });
   return;
@@ -321,38 +335,38 @@ const getIndices = async () => {
 
   var response = await client.search({
     index: "analyses",
-    size: 5000
+    size: 5000,
   });
 
-  const indexNames = response.body.hits.hits.map(hit =>
+  const indexNames = response.body.hits.hits.map((hit) =>
     hit._source.dashboard_id ? hit._source.dashboard_id : hit._source.jira_id
   );
   return [...new Set(indexNames)].sort(collator.compare);
 };
 
-const getApiId = async uid => {
+const getApiId = async (uid) => {
   const apiKeyResult = await authClient(
     adminUser,
     adminPass
   ).security.getApiKey({
-    name: "login-" + uid
+    name: "login-" + uid,
   });
 
   if (apiKeyResult.statusCode === 200) {
     return apiKeyResult.body.api_keys.filter(
-      key => key.invalidated === false
+      (key) => key.invalidated === false
     )[0].id;
   }
 };
-const updateDashboardColumns = async columns => {
+const updateDashboardColumns = async (columns) => {
   const client = createSuperUserClient();
-  const body = columns.flatMap(doc => [
+  const body = columns.flatMap((doc) => [
     { index: { _index: "metadata_labels", _type: "_doc", _id: doc["id"] } },
-    { ...doc }
+    { ...doc },
   ]);
   const { body: bulkResponse } = await client.bulk({
     refresh: true,
-    body: body
+    body: body,
   });
 
   if (bulkResponse.errors) {
@@ -367,7 +381,7 @@ const updateDashboardColumns = async columns => {
           status: action[operation].status,
           error: action[operation].error,
           operation: body[i * 2],
-          document: body[i * 2 + 1]
+          document: body[i * 2 + 1],
         });
       }
     });
@@ -376,29 +390,33 @@ const updateDashboardColumns = async columns => {
     return { created: true };
   }
 };
-const getKey = async key => await redis.get(key);
+const getKey = async (key) => await redis.get(key);
 
 export const resolvers = {
   UserDashboard: {
-    dashboards: root => root.dashboards,
-    defaultDashboard: root => root.defaultDashboard
+    dashboards: (root) => root.dashboards,
+    defaultDashboard: (root) => root.defaultDashboard,
   },
   Dashboard: {
-    name: root => root.name,
-    count: root => root.count
+    name: (root) => root.name,
+    count: (root) => root.count,
   },
   Index: {
-    name: root => root
+    name: (root) => root,
   },
   DeleteAcknowledgment: {
-    allDeleted: root => root.deleted === root.total
+    allDeleted: (root) => root.deleted === root.total,
   },
   UpdateAcknowledgement: {
-    updated: root => root.created
+    updated: (root) => root.created,
+  },
+  DashboardChecker: {
+    name: (root) => root.name,
+    indices: (root) => root.indices,
   },
   DashboardColumns: {
-    type: root => root.type,
-    label: root => root.label
+    type: (root) => root.type,
+    label: (root) => root.label,
   },
   Query: {
     async getAllSettings() {
@@ -412,6 +430,24 @@ export const resolvers = {
     },
     async updateDashboardColumns(_, { columns }) {
       return await updateDashboardColumns(columns);
+    },
+    async getAllDashboardsWithAnalysis(_, { auth }) {
+      const isPasswordCorrect = await authClient(
+        auth.uid,
+        auth.authKeyID
+      ).security.authenticate();
+
+      if (isPasswordCorrect && isPasswordCorrect.statusCode === 200) {
+        const isUserAdmin = await isAdmin(auth);
+        if (isUserAdmin) {
+          const apiClient = await createSuperUserClient();
+          return getAllDashboardsWithAnalysis(apiClient);
+        } else {
+          //wrong user
+        }
+      } else {
+        //auth error
+      }
     },
     async updateDashboardByName(_, { dashboard }) {
       return await updateDashboard(
@@ -470,9 +506,9 @@ export const resolvers = {
           defaultDashboard: lastSelectedDashboard
             ? lastSelectedDashboard
             : allDashboards[0]["name"],
-          dashboards: allDashboards.map(dashboard => ({
-            name: dashboard["name"]
-          }))
+          dashboards: allDashboards.map((dashboard) => ({
+            name: dashboard["name"],
+          })),
         };
       }
       return {
@@ -483,11 +519,11 @@ export const resolvers = {
           return [
             ...final,
             {
-              name: dashboardName.split("_")[0]
-            }
+              name: dashboardName.split("_")[0],
+            },
           ];
-        }, [])
+        }, []),
       };
-    }
-  }
+    },
+  },
 };

@@ -13,9 +13,9 @@ const authClient = (user, password) =>
     node: URL,
     auth: {
       username: user,
-      password: password
+      password: password,
     },
-    ssl: { rejectUnauthorized: false }
+    ssl: { rejectUnauthorized: false },
   });
 
 export default authClient;

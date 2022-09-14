@@ -10,10 +10,9 @@ import _ from "lodash";
 import cacheConfig from "./api/cacheConfigs.js";
 import { createSuperUserClient } from "./utils.js";
 import {
-  getApiId,
   getIndicesByDashboard,
   getDashboardColumnsByDashboard,
-  getAllSettings
+  getAllSettings,
 } from "./Dashboards";
 
 const FIELD_HIERARCHY = ["project", "sample_id", "library_id", "dashboard_id"];
@@ -21,7 +20,7 @@ const FIELD_NAMES = {
   project: "Project",
   sample_id: "Sample ID",
   library_id: "Library",
-  dashboard_id: "Dashboard ID"
+  dashboard_id: "Dashboard ID",
 };
 
 export const schema = gql`
@@ -91,17 +90,17 @@ export const schema = gql`
 
 const filterChildren = (root, hierarchyLevel) => {
   const uniqueRoot = _.uniq(
-    root.filtered.map(analysis => analysis[FIELD_HIERARCHY[hierarchyLevel]])
+    root.filtered.map((analysis) => analysis[FIELD_HIERARCHY[hierarchyLevel]])
   );
 
-  const mappedRoot = uniqueRoot.map(field => ({
+  const mappedRoot = uniqueRoot.map((field) => ({
     target: field,
     source: root.filtered[0][FIELD_HIERARCHY[hierarchyLevel - 1]],
     hierarchyLevel: hierarchyLevel + 1,
     filtered: root.filtered.filter(
-      analysis =>
+      (analysis) =>
         analysis[FIELD_HIERARCHY[hierarchyLevel]].localeCompare(field) === 0
-    )
+    ),
   }));
 
   return mappedRoot;
@@ -127,10 +126,10 @@ const getAnalyses = async (filters, auth, dashboardName) => {
   const data = await client(authKey, auth.authKeyID).search(
     {
       index: "analyses",
-      body: query
+      body: query,
     },
     {
-      ignore: [401]
+      ignore: [401],
     }
   );
   if (data["body"].hasOwnProperty("error")) {
@@ -144,13 +143,13 @@ const getAnalyses = async (filters, auth, dashboardName) => {
     }, {});
 
     const allowedAnalyses = data["body"]["hits"]["hits"]
-      .map(hit => hit["_source"])
-      .filter(analysis =>
+      .map((hit) => hit["_source"])
+      .filter((analysis) =>
         allowedIndicesObj.hasOwnProperty(
           analysis.dashboard_id ? analysis.dashboard_id : analysis.jira_id
         )
       )
-      .map(analysis => {
+      .map((analysis) => {
         analysis["project"] = dashboardName;
         return analysis;
       });
@@ -160,7 +159,7 @@ const getAnalyses = async (filters, auth, dashboardName) => {
 
 const getUniqueValuesInKey = (list, key) =>
   list
-    .map(element => element[key])
+    .map((element) => element[key])
     .reduce(
       (uniques, value) =>
         uniques.indexOf(value) === -1 ? [...uniques, value] : uniques,
@@ -169,61 +168,61 @@ const getUniqueValuesInKey = (list, key) =>
 
 export const resolvers = {
   Analyses: {
-    error: root => root.error,
-    defaultProjectView: root => root.defaultProjectView,
-    analysesStats: root => root.stats,
-    analysesList: root => root.list,
-    analysesTree: root => root.tree,
-    analysesRows: root => root.tree,
-    tableData: root => root.tree,
-    recentAnalysis: root => root.recentAnalysis
+    error: (root) => root.error,
+    defaultProjectView: (root) => root.defaultProjectView,
+    analysesStats: (root) => root.stats,
+    analysesList: (root) => root.list,
+    analysesTree: (root) => root.tree,
+    analysesRows: (root) => root.tree,
+    tableData: (root) => root.tree,
+    recentAnalysis: (root) => root.recentAnalysis,
   },
   TableData: {
-    rows: root => Object.keys(root).map(d => ({ type: d, value: root[d] }))
+    rows: (root) => Object.keys(root).map((d) => ({ type: d, value: root[d] })),
   },
   TableRows: {
-    type: root => root.type,
-    value: root => root.value
+    type: (root) => root.type,
+    value: (root) => root.value,
   },
   ParentType: {
-    source: root => root.source,
-    children: root => filterChildren(root, root.hierarchyLevel)
+    source: (root) => root.source,
+    children: (root) => filterChildren(root, root.hierarchyLevel),
   },
   ChildType: {
-    source: root => root.source,
-    value: () => 1
+    source: (root) => root.source,
+    value: () => 1,
   },
   AnalysisRow: {
-    project: root => root.project,
-    sample_id: root => root.sample_id,
-    library_id: root => root.library_id,
-    dashboard_id: root =>
+    project: (root) => root.project,
+    sample_id: (root) => root.sample_id,
+    library_id: (root) => root.library_id,
+    dashboard_id: (root) =>
       root.dashboard_id ? root.dashboard_id : root.jira_id,
-    timestamp: root => root.timestamp,
-    metadata: root => root
+    timestamp: (root) => root.timestamp,
+    metadata: (root) => root,
   },
   AnalysesTree: {
     source: () => null,
-    children: root => filterChildren({ filtered: [...root] }, 0)
+    children: (root) => filterChildren({ filtered: [...root] }, 0),
   },
   NodeType: {
-    target: root => root.target,
+    target: (root) => root.target,
     __resolveType(event, context, info) {
       if (event.hierarchyLevel === FIELD_HIERARCHY.length) {
         return "ChildType";
       } else {
         return "ParentType";
       }
-    }
+    },
   },
   AnalysisGroup: {
-    label: root => root.label,
-    type: root => root.type,
-    values: root => root.values
+    label: (root) => root.label,
+    type: (root) => root.type,
+    values: (root) => root.values,
   },
   Stat: {
-    label: root => root.label,
-    value: root => root.value
+    label: (root) => root.label,
+    value: (root) => root.value,
   },
   Query: {
     analysisMetadata: async (_, { analysis, project }) => {
@@ -234,10 +233,10 @@ export const resolvers = {
       const data = await client.search(
         {
           index: "analyses",
-          body: baseQuery.build()
+          body: baseQuery.build(),
         },
         {
-          ignore: [401]
+          ignore: [401],
         }
       );
       const dashboardColumns = await getDashboardColumnsByDashboard(project);
@@ -246,16 +245,16 @@ export const resolvers = {
         return final;
       }, {});
 
-      const dahboardColumnTypes = dashboardColumns.map(d => d.type).join(" ");
+      const dahboardColumnTypes = dashboardColumns.map((d) => d.type).join(" ");
 
       const source = data["body"]["hits"]["hits"]
-        .map(hit => hit["_source"])
-        .filter(hit => hit["dashboard_id"] === analysis)[0];
+        .map((hit) => hit["_source"])
+        .filter((hit) => hit["dashboard_id"] === analysis)[0];
       const sourceKeys = Object.keys(source);
 
       return sourceKeys
-        .filter(d => dahboardColumnTypes.indexOf(d) !== -1)
-        .map(d => ({ type: dashboardColumnMapping[d], value: source[d] }));
+        .filter((d) => dahboardColumnTypes.indexOf(d) !== -1)
+        .map((d) => ({ type: dashboardColumnMapping[d], value: source[d] }));
     },
     analyses: async (_, { filters, auth, dashboardName }) => {
       const data = await getAnalyses(filters, auth, dashboardName);
@@ -266,19 +265,19 @@ export const resolvers = {
         );
         const counts = [
           ...allColumns,
-          { label: "timestamp", type: "timestamp" }
+          { label: "timestamp", type: "timestamp" },
         ]
-          .map(field => {
+          .map((field) => {
             const values = getUniqueValuesInKey(data, field.type);
             return {
               label: field.label,
               value: values.length,
               type: field.type,
-              values: values[0] === undefined ? [] : values
+              values: values[0] === undefined ? [] : values,
             };
           })
-          .filter(field => field.values.length !== 0);
-        const recentAnalysis = data.filter(d => d.timestamp);
+          .filter((field) => field.values.length !== 0);
+        const recentAnalysis = data.filter((d) => d.timestamp);
         return {
           error: false,
           defaultProjectView:
@@ -286,7 +285,7 @@ export const resolvers = {
           tree: data,
           list: counts,
           stats: counts,
-          recentAnalysis: [...recentAnalysis]
+          recentAnalysis: [...recentAnalysis],
         };
       } else {
         return {
@@ -295,9 +294,9 @@ export const resolvers = {
           tree: [],
           list: [],
           stats: [],
-          recentAnalysis: []
+          recentAnalysis: [],
         };
       }
-    }
-  }
+    },
+  },
 };

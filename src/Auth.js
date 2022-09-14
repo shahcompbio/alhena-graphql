@@ -103,14 +103,26 @@ export const schema = gql`
     lastSettingsTab: Int
   }
 `;
+export const isAdmin = async (auth) => {
+  const client = createSuperUserClient();
+  const retrievedUser = await client.security.getUser(
+    {
+      username: auth.uid,
+    },
+    { ignore: [404] }
+  );
+  return retrievedUser.statusCode === 404
+    ? false
+    : retrievedUser.body[auth.uid].metadata["isAdmin"];
+};
 
-const verifyUriKey = async key => await redis.get(key);
+const verifyUriKey = async (key) => await redis.get(key);
 
 const checkUserExistance = async (username, email) => {
   const client = createSuperUserClient();
   const retrievedUser = await client.security.getUser(
     {
-      username: username
+      username: username,
     },
     { ignore: [404] }
   );
@@ -120,14 +132,10 @@ const checkUserExistance = async (username, email) => {
     : retrievedUser["body"][username]["email"] === email;
 };
 
-const allowResetPassword = async username => {
+const allowResetPassword = async (username) => {
   const redisSecretHash =
-    Math.random()
-      .toString(36)
-      .substring(2, 15) +
-    Math.random()
-      .toString(36)
-      .substring(2, 15);
+    Math.random().toString(36).substring(2, 15) +
+    Math.random().toString(36).substring(2, 15);
   await redis.set(redisSecretHash, username);
 
   await redis.expireat(redisSecretHash, parseInt(+new Date() / 1000) + 86400);
@@ -143,12 +151,12 @@ const updatePassword = async (username, newPassword) => {
     username: username,
     refresh: "wait_for",
     body: {
-      password: newPassword
-    }
+      password: newPassword,
+    },
   });
   return response.statusCode;
 };
-const removeDashbaordFromUsers = async name => {
+const removeDashbaordFromUsers = async (name) => {
   const client = createSuperUserClient();
   var userContent = await client.security.getUser({});
 
@@ -157,36 +165,35 @@ const removeDashbaordFromUsers = async name => {
     //if the user has this dashboard delete
     if (userObj["roles"].indexOf(name + cacheConfig["dashboardRoles"]) !== -1) {
       userObj["roles"] = userObj["roles"].filter(
-        role => role !== name + cacheConfig["dashboardRoles"]
+        (role) => role !== name + cacheConfig["dashboardRoles"]
       );
     }
     final[user] = userObj;
     return final;
   }, {});
   //update users
-  Object.keys(newUserObj).map(async user => {
+  Object.keys(newUserObj).map(async (user) => {
     var userResponses = await client.security.putUser({
       username: user,
       refresh: "wait_for",
-      body: { ...newUserObj[user] }
+      body: { ...newUserObj[user] },
     });
   });
 };
-const deleteUser = async username => {
+const deleteUser = async (username) => {
   const client = createSuperUserClient();
 
   var response = await client.security.deleteUser({
     username: username,
-    refresh: "wait_for"
+    refresh: "wait_for",
   });
   return response.body;
 };
 
-const createNewUser = async user => {
+const createNewUser = async (user) => {
   var roles = await redis.get(
     cacheConfig["newUserDashboardRoles"] + user.email
   );
-
   const isAdmin = await redis.get(cacheConfig["newUserIsAdmin"] + user.email);
 
   if (roles === null) {
@@ -202,19 +209,21 @@ const createNewUser = async user => {
         full_name: user.name,
         email: user.email,
         roles: [
-          ...roles.split(",").map(role => role + cacheConfig["dashboardRoles"])
+          ...roles
+            .split(",")
+            .map((role) => role + cacheConfig["dashboardRoles"]),
         ],
         metadata: {
           isAdmin:
-            isAdmin !== null ? (isAdmin === "true" ? true : false) : false
-        }
-      }
+            isAdmin !== null ? (isAdmin === "true" ? true : false) : false,
+        },
+      },
     });
 
     return response.body;
   }
 };
-const getUsers = async auth => {
+const getUsers = async (auth) => {
   const authKey = await redis.get(auth.uid + ":" + auth.authKeyID);
   const data = await client(authKey, auth.authKeyID).security.getUser({});
 
@@ -222,38 +231,38 @@ const getUsers = async auth => {
     data.statusCode === 200
       ? Object.keys(data.body)
           .filter(
-            name => !superUserRoles.hasOwnProperty(data.body[name].roles[0])
+            (name) => !superUserRoles.hasOwnProperty(data.body[name].roles[0])
           )
-          .map(name => {
+          .map((name) => {
             return { ...data.body[name] };
           })
-          .map(user => {
-            user["roles"] = user.roles.map(role => role.split("_")[0]);
+          .map((user) => {
+            user["roles"] = user.roles.map((role) => role.split("_")[0]);
             return user;
           })
       : [];
 
   return users;
 };
-const getLastSettingsTab = async user => {
+const getLastSettingsTab = async (user) => {
   const index = await redis.get(cacheConfig["lastSettingsTab"] + user.uid);
   return index === null ? 0 : index;
 };
-const incompleteLogin = statusCode => {
+const incompleteLogin = (statusCode) => {
   return { statusCode: statusCode, authKeyID: null, role: [] };
 };
 
-const logout = async username => {
+const logout = async (username) => {
   const client = createSuperUserClient();
 
   const oldKey = await client.security.invalidateApiKey({
-    body: { name: "login-" + username }
+    body: { name: "login-" + username },
   });
 
   return oldKey && oldKey.statusCode === 200;
 };
 
-const login = async user => {
+const login = async (user) => {
   const isPasswordCorrect = await authClient(
     user.uid,
     user.password
@@ -262,7 +271,7 @@ const login = async user => {
   if (isPasswordCorrect.statusCode === 200) {
     const client = createSuperUserClient();
     const result = await client.security.getApiKey({
-      name: "login-" + user.uid
+      name: "login-" + user.uid,
     });
 
     if (result.statusCode === 200) {
@@ -271,7 +280,7 @@ const login = async user => {
       var oldKey;
       if (result.body.api_keys.length !== 0) {
         oldKey = await client.security.invalidateApiKey({
-          body: { name: "login-" + user.uid }
+          body: { name: "login-" + user.uid },
         });
       }
 
@@ -279,14 +288,14 @@ const login = async user => {
         const newKey = await client.security.createApiKey({
           body: {
             name: "login-" + user.uid,
-            expiration: "1d"
+            expiration: "1d",
           },
-          refresh: "wait_for"
+          refresh: "wait_for",
         });
 
         if (newKey.statusCode === 200) {
           const roleMapping = await client.security.getUser({
-            username: user.uid
+            username: user.uid,
           });
 
           //store in local sotrage to expire tomorrow
@@ -302,7 +311,7 @@ const login = async user => {
             authKeyID: newKey.body ? newKey.body.id : null,
             role: roleMapping.body[user.uid].roles,
             isAdmin: roleMapping.body[user.uid].metadata.isAdmin,
-            lastSettingsTab: lastSettingsTab
+            lastSettingsTab: lastSettingsTab,
           };
         } else {
           return incompleteLogin(newKey.statusCode);
@@ -318,27 +327,28 @@ const login = async user => {
 const doesUserExist = async (email, username) => {
   const client = createSuperUserClient();
   const response = await client.security.getUser({});
+
   const responseUser =
     username !== null
       ? Object.keys(response.body).filter(
-          user => response.body[user].email === email
+          (user) => response.body[user].email === email
         )
       : [];
 
   return {
     doesUserExist:
       Object.keys(response.body)
-        .map(user => response.body[user].email)
+        .map((user) => response.body[user].email)
         .indexOf(email) !== -1
         ? true
         : false,
     confirmReset:
       responseUser.length > 0 && username && responseUser[0] === username
         ? true
-        : false
+        : false,
   };
 };
-const generateNewUserLink = async newUser => {
+const generateNewUserLink = async (newUser) => {
   var homePath = process.env.SERVER_NAME
     ? "https://" +
       process.env.SERVER_NAME +
@@ -349,12 +359,8 @@ const generateNewUserLink = async newUser => {
     : "http://localhost:3001/NewAccount";
 
   const redisSecretHash =
-    Math.random()
-      .toString(36)
-      .substring(2, 15) +
-    Math.random()
-      .toString(36)
-      .substring(2, 15);
+    Math.random().toString(36).substring(2, 15) +
+    Math.random().toString(36).substring(2, 15);
 
   const finalUrl = homePath + "/" + redisSecretHash;
 
@@ -365,6 +371,9 @@ const generateNewUserLink = async newUser => {
   await redis.set(
     cacheConfig["newUserDashboardRoles"] + newUser.email,
     newUser.roles
+  );
+  const r = await redis.get(
+    cacheConfig["newUserDashboardRoles"] + newUser.email
   );
   await redis.expireat(
     cacheConfig["newUserDashboardRoles"] + newUser.email,
@@ -395,14 +404,14 @@ const updateUser = async (newRoles, username, email, name, isAdmin) => {
       email: email,
       full_name: name,
       roles: [
-        ...newRoles.map(role =>
+        ...newRoles.map((role) =>
           role.indexOf(cacheConfig["dashboardRoles"]) === -1
             ? role + cacheConfig["dashboardRoles"]
             : role
-        )
+        ),
       ],
-      metadata: { isAdmin: isAdmin }
-    }
+      metadata: { isAdmin: isAdmin },
+    },
   });
   return response.body;
 };
@@ -454,7 +463,7 @@ export const resolvers = {
     },
     updateUser: async (_, { newRoles, username, email, name, isAdmin }) => {
       return await updateUser(newRoles, username, email, name, isAdmin);
-    }
+    },
   },
   AppUsers: {
     username: ({ username }) => username,
@@ -462,45 +471,45 @@ export const resolvers = {
     full_name: ({ full_name }) => full_name,
     enabled: ({ enabled }) => enabled.toString(),
     email: ({ email }) => email,
-    isAdmin: root =>
+    isAdmin: (root) =>
       root["metadata"].hasOwnProperty("isAdmin")
         ? root["metadata"]["isAdmin"] === "true"
           ? true
           : root["metadata"]["isAdmin"] === "false"
           ? false
           : root["metadata"]["isAdmin"]
-        : false
+        : false,
   },
   Confirmation: {
-    confirmed: root => root
+    confirmed: (root) => root,
   },
   ConfirmationHashLink: {
-    hashLink: root => root
+    hashLink: (root) => root,
   },
   Acknowledgement: {
-    confirmed: root => root
+    confirmed: (root) => root,
   },
   DoesUserExistResponse: {
-    confirmReset: root => root.confirmReset,
-    userAlreadyExists: root => root.userAlreadyExists
+    confirmReset: (root) => root.confirmReset,
+    userAlreadyExists: (root) => root.userAlreadyExists,
   },
   NewUserLinkResponse: {
-    newUserLink: root => root
+    newUserLink: (root) => root,
   },
   NewUserAcknowledgement: {
-    isValid: root => (root.email || root.username ? true : false),
-    email: root => root.email,
-    username: root => root.username
+    isValid: (root) => (root.email || root.username ? true : false),
+    email: (root) => root.email,
+    username: (root) => root.username,
   },
   DeletionAcknowledgement: {
-    isDeleted: root => root.found
+    isDeleted: (root) => root.found,
   },
-  CreationAcknowledgement: { created: root => root.created },
+  CreationAcknowledgement: { created: (root) => root.created },
   LoginAcknowledgement: {
-    statusCode: root => root.statusCode,
-    authKeyID: root => root.authKeyID,
-    role: root => root.role,
-    isAdmin: root => (root.role[0] === "superuser" ? true : root.isAdmin),
-    lastSettingsTab: root => root.lastSettingsTab
-  }
+    statusCode: (root) => root.statusCode,
+    authKeyID: (root) => root.authKeyID,
+    role: (root) => root.role,
+    isAdmin: (root) => (root.role[0] === "superuser" ? true : root.isAdmin),
+    lastSettingsTab: (root) => root.lastSettingsTab,
+  },
 };
